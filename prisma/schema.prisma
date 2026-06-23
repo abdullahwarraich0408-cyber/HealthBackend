@@ -1,0 +1,612 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Account {
+  id           String   @id @default(uuid())
+  email        String   @unique
+  password     String
+  role         String   // "customer", "admin", "vendor", "doctor", "lab"
+  is_active    Boolean  @default(true)
+  created_at   DateTime @default(now())
+  updated_at   DateTime @updatedAt
+
+  customer     User?
+  vendor       Vendor?
+  doctor       Doctor?
+  lab_partner  LabPartner?
+
+  @@map("accounts")
+}
+
+model User {
+  id            String   @id @default(uuid())
+  account_id    String?  @unique
+  email         String?  @unique
+  password      String?
+  name          String
+  role          String   @default("customer") // customer, admin
+  phone                    String?
+  addresses                Json?
+  profile_data             Json?
+  notification_preferences Json?
+  created_at               DateTime @default(now())
+  updated_at    DateTime @updatedAt
+
+  account       Account? @relation(fields: [account_id], references: [id])
+
+  orders        Order[]
+  prescriptions Prescription[]
+  prescription_orders PrescriptionOrder[]
+  reviews       Review[]
+  return_requests ReturnRequest[]
+  doctor_appointments DoctorAppointment[]
+  doctor_reviews      DoctorReview[]
+  lab_test_bookings   LabTestBooking[]
+
+  @@map("users")
+}
+
+model Vendor {
+  id                         String   @id @default(uuid())
+  account_id                 String?  @unique
+  email                      String?  @unique
+  password                   String?
+  business_name              String
+  license_number             String
+  status                     String   @default("pending") // pending, approved, rejected
+  commission_rate            Float    @default(10.0)
+  trade_license_url          String?
+  pharmacist_certificate_url String?
+  address                    String?
+  city                       String?
+  latitude                   Float?
+  longitude                  Float?
+  service_radius_km          Float    @default(10.0)
+  is_open                    Boolean  @default(true)
+  is_online                  Boolean  @default(true)
+  average_rating             Float    @default(4.5)
+  created_at                 DateTime @default(now())
+  updated_at                 DateTime @updatedAt
+
+  account                    Account? @relation(fields: [account_id], references: [id])
+
+  products        Product[]
+  orders          Order[]
+  payouts         Payout[]
+  reviews         Review[]
+  offers          Offer[]
+  current_prescription_orders PrescriptionOrder[] @relation("CurrentVendor")
+  assigned_prescription_orders PrescriptionOrder[] @relation("AssignedVendor")
+  prescription_assignments PrescriptionAssignmentLog[]
+
+  @@map("vendors")
+}
+
+model Product {
+  id          String   @id @default(uuid())
+  vendor_id   String
+  name        String
+  formula     String?
+  description String?
+  price       Float
+  stock       Int      @default(0)
+  image_url   String?
+  category    String?
+  created_at  DateTime @default(now())
+  updated_at  DateTime @updatedAt
+
+  vendor      Vendor   @relation(fields: [vendor_id], references: [id])
+  order_items OrderItem[]
+  reviews     Review[]
+  prescriptions Prescription[]
+  prescription_order_items PrescriptionOrderItem[]
+  offers      Offer[]
+
+  @@map("products")
+}
+
+model Order {
+  id                    String   @id @default(uuid())
+  customer_id           String
+  vendor_id             String
+  checkout_session_id   String?
+  total_amount          Float
+  status                String   @default("pending") // pending, processing, shipped, delivered, cancelled
+  requires_prescription Boolean  @default(false)
+  delivery_address      Json
+  created_at            DateTime @default(now())
+  updated_at            DateTime @updatedAt
+
+  customer              User     @relation(fields: [customer_id], references: [id])
+  vendor                Vendor   @relation(fields: [vendor_id], references: [id])
+  items                 OrderItem[]
+  transactions          OrderTransaction[]
+  commissions           Commission[]
+  prescriptions         Prescription[]
+  return_requests       ReturnRequest[]
+
+  @@map("orders")
+}
+
+model OrderItem {
+  id          String   @id @default(uuid())
+  order_id    String
+  product_id  String
+  quantity    Int
+  unit_price  Float
+
+  order       Order    @relation(fields: [order_id], references: [id])
+  product     Product  @relation(fields: [product_id], references: [id])
+
+  @@map("order_items")
+}
+
+model Transaction {
+  id                String   @id @default(uuid())
+  amount            Float
+  type              String   // payment, refund
+  gateway_reference String?
+  status            String   @default("pending") // pending, completed, failed
+  created_at        DateTime @default(now())
+
+  order_transactions OrderTransaction[]
+
+  @@map("transactions")
+}
+
+model OrderTransaction {
+  id             String   @id @default(uuid())
+  transaction_id String
+  order_id       String
+
+  transaction    Transaction @relation(fields: [transaction_id], references: [id])
+  order          Order       @relation(fields: [order_id], references: [id])
+
+  @@map("order_transactions")
+}
+
+model Commission {
+  id          String   @id @default(uuid())
+  order_id    String
+  amount      Float
+  created_at  DateTime @default(now())
+
+  order       Order    @relation(fields: [order_id], references: [id])
+
+  @@map("commissions")
+}
+
+model Payout {
+  id                String   @id @default(uuid())
+  vendor_id         String
+  amount            Float
+  status            String   @default("pending") // pending, processing, completed, failed
+  payout_date       DateTime?
+  gateway_reference String?
+  created_at        DateTime @default(now())
+
+  vendor            Vendor   @relation(fields: [vendor_id], references: [id])
+
+  @@map("payouts")
+}
+
+model Prescription {
+  id          String   @id @default(uuid())
+  customer_id String
+  order_id    String?
+  product_id  String?
+  file_url    String
+  status      String   @default("pending") // pending, verified, rejected
+  verified_by String?
+  notes       String?
+  created_at  DateTime @default(now())
+
+  customer    User     @relation(fields: [customer_id], references: [id])
+  order       Order?   @relation(fields: [order_id], references: [id])
+  product     Product? @relation(fields: [product_id], references: [id])
+
+  @@map("prescriptions")
+}
+
+model PrescriptionOrder {
+  id                  String   @id @default(uuid())
+  customer_id         String
+  file_url            String
+  delivery_address    Json
+  delivery_type       String   @default("standard") // express, standard
+  status              String   @default("finding_vendor")
+  estimated_value     Float    @default(0)
+  current_vendor_id   String?
+  assigned_vendor_id  String?
+  accept_deadline     DateTime?
+  rejected_vendor_ids Json     @default("[]")
+  assignment_attempts Int      @default(0)
+  stock_status        String?
+  customer_confirmed  Boolean  @default(false)
+  distance_km         Float?
+  eta_minutes         Int?
+  medicine_count      Int      @default(0)
+  created_at          DateTime @default(now())
+  updated_at          DateTime @updatedAt
+
+  customer            User     @relation(fields: [customer_id], references: [id])
+  current_vendor      Vendor?  @relation("CurrentVendor", fields: [current_vendor_id], references: [id])
+  assigned_vendor     Vendor?  @relation("AssignedVendor", fields: [assigned_vendor_id], references: [id])
+  items               PrescriptionOrderItem[]
+  assignment_logs     PrescriptionAssignmentLog[]
+
+  @@map("prescription_orders")
+}
+
+model PrescriptionOrderItem {
+  id                    String   @id @default(uuid())
+  prescription_order_id String
+  name                  String
+  quantity              Int      @default(1)
+  unit_price            Float    @default(0)
+  availability          String   @default("pending") // pending, available, unavailable
+  product_id            String?
+
+  prescription_order    PrescriptionOrder @relation(fields: [prescription_order_id], references: [id], onDelete: Cascade)
+  product               Product?          @relation(fields: [product_id], references: [id])
+
+  @@map("prescription_order_items")
+}
+
+model PrescriptionAssignmentLog {
+  id                    String   @id @default(uuid())
+  prescription_order_id String
+  vendor_id             String
+  action                String   // offered, accepted, declined, timeout, offline
+  score                 Float?
+  created_at            DateTime @default(now())
+
+  prescription_order    PrescriptionOrder @relation(fields: [prescription_order_id], references: [id], onDelete: Cascade)
+  vendor                Vendor            @relation(fields: [vendor_id], references: [id])
+
+  @@map("prescription_assignment_logs")
+}
+
+model Review {
+  id          String   @id @default(uuid())
+  customer_id String
+  product_id  String?
+  vendor_id   String?
+  rating      Int
+  comment     String?
+  created_at  DateTime @default(now())
+
+  customer    User     @relation(fields: [customer_id], references: [id])
+  product     Product? @relation(fields: [product_id], references: [id])
+  vendor      Vendor?  @relation(fields: [vendor_id], references: [id])
+
+  @@map("reviews")
+}
+
+model AuditLog {
+  id          String   @id @default(uuid())
+  user_id     String?  // nullable if system action
+  action      String
+  entity      String
+  entity_id   String?
+  details     Json?
+  created_at  DateTime @default(now())
+
+  @@map("audit_logs")
+}
+
+model Coupon {
+  id                  String   @id @default(uuid())
+  code                String   @unique
+  discount_type       String   // "percentage" | "fixed"
+  discount_value      Float
+  min_order_amount    Float    @default(0.0)
+  max_discount_amount Float?
+  start_date          DateTime
+  expiry_date         DateTime
+  usage_limit         Int?
+  used_count          Int      @default(0)
+  is_active           Boolean  @default(true)
+  created_at          DateTime @default(now())
+  updated_at          DateTime @updatedAt
+
+  @@map("coupons")
+}
+
+model Offer {
+  id                  String   @id @default(uuid())
+  vendor_id           String
+  product_id          String
+  discount_percentage Float
+  start_date          DateTime
+  expiry_date         DateTime
+  is_active           Boolean  @default(true)
+  created_at          DateTime @default(now())
+  updated_at          DateTime @updatedAt
+
+  vendor              Vendor   @relation(fields: [vendor_id], references: [id])
+  product             Product  @relation(fields: [product_id], references: [id])
+
+  @@map("offers")
+}
+
+model ReturnRequest {
+  id            String   @id @default(uuid())
+  order_id      String
+  customer_id   String
+  reason        String
+  status        String   @default("pending") // pending, approved, rejected, processed
+  refund_amount Float?
+  notes         String?
+  created_at    DateTime @default(now())
+  updated_at    DateTime @updatedAt
+
+  order         Order    @relation(fields: [order_id], references: [id])
+  customer      User     @relation(fields: [customer_id], references: [id])
+
+  @@map("return_requests")
+}
+
+model Hospital {
+  id           String   @id @default(uuid())
+  name         String
+  slug         String   @unique
+  logo         String?
+  cover_image  String?
+  description  String?
+  address      String?
+  city         String?
+  phone        String?
+  email        String?
+  is_active    Boolean  @default(true)
+  created_by   String?
+  created_at   DateTime @default(now())
+  updated_at   DateTime @updatedAt
+
+  doctors      Doctor[]
+  practice_locations DoctorPracticeLocation[]
+
+  @@map("hospitals")
+}
+
+model Doctor {
+  id               String   @id @default(uuid())
+  account_id       String?  @unique
+  email            String?  @unique
+  password         String?
+  phone            String?
+  name             String
+  specialty        String
+  experience_years Int
+  rating           Float    @default(4.5)
+  reviews_count    Int      @default(0)
+  fee              Float
+  online           Boolean  @default(true)
+  available_today  Boolean  @default(true)
+  languages        Json
+  photo_url        String?
+  slots            Json
+  about            String?
+  qualifications   Json
+  hospital_id      String?
+  hospital         String
+  notification_preferences Json?
+  is_active        Boolean  @default(true)
+  created_at       DateTime @default(now())
+  updated_at       DateTime @updatedAt
+
+  account          Account? @relation(fields: [account_id], references: [id])
+  hospital_ref     Hospital? @relation(fields: [hospital_id], references: [id])
+
+  reviews          DoctorReview[]
+  appointments     DoctorAppointment[]
+  practice_locations DoctorPracticeLocation[]
+
+  @@map("doctors")
+}
+
+model DoctorPracticeLocation {
+  id           String   @id @default(uuid())
+  doctor_id    String
+  hospital_id  String?
+  clinic_name  String?
+  address      String?
+  fee          Float?
+  schedule     Json
+  is_active    Boolean  @default(true)
+  created_at   DateTime @default(now())
+  updated_at   DateTime @updatedAt
+
+  doctor       Doctor   @relation(fields: [doctor_id], references: [id], onDelete: Cascade)
+  hospital     Hospital? @relation(fields: [hospital_id], references: [id])
+
+  @@map("doctor_practice_locations")
+}
+
+model LabPartner {
+  id                       String   @id @default(uuid())
+  account_id               String?  @unique
+  email                    String?  @unique
+  password                 String?
+  name                     String
+  license_number           String?
+  address                  String?
+  city                     String?
+  phone                    String?
+  bio                      String?
+  home_collection          Boolean  @default(true)
+  operating_hours          String?
+  collection_areas         String?
+  notification_preferences Json?
+  rating                   Float    @default(4.5)
+  status                   String   @default("approved")
+  created_at               DateTime @default(now())
+  updated_at               DateTime @updatedAt
+
+  account                  Account? @relation(fields: [account_id], references: [id])
+
+  lab_tests                LabTest[]
+  lab_bookings             LabTestBooking[]
+
+  @@map("lab_partners")
+}
+
+model DoctorReview {
+  id             String   @id @default(uuid())
+  doctor_id      String
+  customer_id    String?
+  appointment_id String?  @unique
+  author_name    String
+  rating         Int
+  comment        String?
+  created_at     DateTime @default(now())
+
+  doctor         Doctor            @relation(fields: [doctor_id], references: [id], onDelete: Cascade)
+  customer       User?             @relation(fields: [customer_id], references: [id])
+  appointment    DoctorAppointment? @relation(fields: [appointment_id], references: [id])
+
+  @@map("doctor_reviews")
+}
+
+model DoctorAppointment {
+  id                 String   @id @default(uuid())
+  doctor_id          String
+  customer_id        String
+  slot               String
+  appointment_date   DateTime
+  fee                Float
+  status             String   @default("pending")
+  payment_method     String?
+  payment_status     String   @default("pending")
+  reason             String?
+  preferred_consultation_mode String?
+  consultation_mode  String?
+  hospital_id        String?
+  mode_selected_at   DateTime?
+  meeting_id         String?  @unique
+  meeting_url        String?
+  consultation_notes String?
+  created_at         DateTime @default(now())
+  updated_at         DateTime @updatedAt
+
+  doctor             Doctor              @relation(fields: [doctor_id], references: [id])
+  customer           User                @relation(fields: [customer_id], references: [id])
+  prescription       DoctorPrescription?
+  review             DoctorReview?
+  chat               AppointmentChat?
+
+  @@map("doctor_appointments")
+}
+
+model AppointmentChat {
+  id             String   @id @default(uuid())
+  appointment_id String   @unique
+  doctor_id      String
+  customer_id    String
+  is_active      Boolean  @default(true)
+  opens_at       DateTime
+  closes_at      DateTime?
+  created_at     DateTime @default(now())
+  updated_at     DateTime @updatedAt
+
+  appointment    DoctorAppointment    @relation(fields: [appointment_id], references: [id], onDelete: Cascade)
+  messages       AppointmentMessage[]
+
+  @@map("appointment_chats")
+}
+
+model AppointmentMessage {
+  id             String   @id @default(uuid())
+  chat_id        String
+  sender_id      String
+  sender_role    String
+  message        String?
+  message_type   String   @default("text")
+  attachment_url String?
+  is_read        Boolean  @default(false)
+  created_at     DateTime @default(now())
+
+  chat           AppointmentChat @relation(fields: [chat_id], references: [id], onDelete: Cascade)
+
+  @@map("appointment_messages")
+}
+
+model DoctorPrescription {
+  id             String   @id @default(uuid())
+  appointment_id String   @unique
+  doctor_id      String
+  customer_id    String
+  items          Json
+  notes          String?
+  created_at     DateTime @default(now())
+
+  appointment    DoctorAppointment @relation(fields: [appointment_id], references: [id], onDelete: Cascade)
+
+  @@map("doctor_prescriptions")
+}
+
+model LabTest {
+  id               String   @id @default(uuid())
+  name             String
+  lab              String
+  lab_partner_id   String?
+  category         String
+  tests_included   Int
+  collection_time  String
+  report_time      String
+  price            Float
+  popular          Boolean  @default(false)
+  home_collection  Boolean  @default(true)
+  fasting_required Boolean  @default(false)
+  preparation      String?
+  description      String?
+  discount         String?
+  is_active        Boolean  @default(true)
+  created_at       DateTime @default(now())
+  updated_at       DateTime @updatedAt
+
+  lab_partner      LabPartner? @relation(fields: [lab_partner_id], references: [id])
+  bookings         LabTestBooking[]
+
+  @@map("lab_tests")
+}
+
+model LabTestBooking {
+  id                   String    @id @default(uuid())
+  order_group_id       String?
+  lab_test_id          String
+  lab_partner_id       String?
+  customer_id          String
+  patient_name         String?
+  patient_gender       String?
+  patient_age          Int?
+  collection_type      String    @default("HOME")
+  collection_address   Json?
+  time_slot            String
+  collection_date      DateTime
+  price                Float
+  status               String    @default("pending")
+  payment_method       String?
+  payment_status       String    @default("pending")
+  prescription_url     String?
+  report_url           String?
+  notes                String?
+  collector_name       String?
+  collector_phone      String?
+  sample_barcode       String?
+  sample_collected_at  DateTime?
+  created_at           DateTime  @default(now())
+  updated_at           DateTime  @updatedAt
+
+  lab_test             LabTest     @relation(fields: [lab_test_id], references: [id])
+  lab_partner          LabPartner? @relation(fields: [lab_partner_id], references: [id])
+  customer             User        @relation(fields: [customer_id], references: [id])
+
+  @@map("lab_test_bookings")
+}

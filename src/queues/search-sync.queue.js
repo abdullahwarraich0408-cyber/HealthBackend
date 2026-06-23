@@ -1,0 +1,3 @@
+const { Queue } = require('bullmq');
+const redis = require('../config/redis');
+module.exports = new Queue('search-sync', { connection: redis });
