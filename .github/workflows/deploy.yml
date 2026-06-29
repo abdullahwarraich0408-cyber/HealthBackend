@@ -122,6 +122,15 @@ jobs:
               exit 1
             }
 
+            # Apply idempotent Firebase auth tables (user_sessions, etc.)
+            if [ -f prisma/migrations/20250625100000_firebase_auth/migration.sql ]; then
+              npx prisma db execute \
+                --file prisma/migrations/20250625100000_firebase_auth/migration.sql \
+                --schema prisma/schema.prisma || {
+                echo "⚠️ Auth migration SQL failed — check DATABASE_URL and server logs"
+              }
+            fi
+
             # Seed only for non-production environments
             if [ "${NODE_ENV:-production}" != "production" ]; then
               npx prisma db seed
@@ -134,7 +143,7 @@ jobs:
 
             # Restart app with PM2
             if pm2 describe pharmahub-api > /dev/null 2>&1; then
-              pm2 reload pharmahub-api
+              pm2 restart pharmahub-api --update-env
             else
               pm2 start ecosystem.config.js --env production
             fi

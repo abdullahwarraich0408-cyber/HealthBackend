@@ -22,15 +22,38 @@ function findDevTestAccount(phone, code) {
 
 async function findOrCreateDevUser(phone) {
   const normalized = normalizePhone(phone);
+  const accountEmail = `${normalized.replace(/\+/g, '')}@dev.pharmahub.local`;
 
   let user = await prisma.user.findUnique({
     where: { phone: normalized },
     include: { account: true },
   });
 
-  if (user) return user;
+  if (user) {
+    if (user.account) return user;
 
-  const accountEmail = `${normalized.replace(/\+/g, '')}@dev.pharmahub.local`;
+    let account = await prisma.account.findUnique({ where: { email: accountEmail } });
+    if (!account) {
+      account = await prisma.account.create({
+        data: { email: accountEmail, password: null, role: 'customer' },
+      });
+    }
+
+    return prisma.user.update({
+      where: { id: user.id },
+      data: { account_id: account.id },
+      include: { account: true },
+    });
+  }
+
+  const existingAccount = await prisma.account.findUnique({
+    where: { email: accountEmail },
+    include: { customer: true },
+  });
+
+  if (existingAccount?.customer) {
+    return { ...existingAccount.customer, account: existingAccount };
+  }
 
   const account = await prisma.account.create({
     data: {
