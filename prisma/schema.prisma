@@ -10,8 +10,8 @@ datasource db {
 model Account {
   id           String   @id @default(uuid())
   email        String   @unique
-  password     String
-  role         String   // "customer", "admin", "vendor", "doctor", "lab"
+  password     String?
+  role         String   // "customer", "admin", "vendor", "doctor", "lab", "hospital"
   is_active    Boolean  @default(true)
   created_at   DateTime @default(now())
   updated_at   DateTime @updatedAt
@@ -25,31 +25,91 @@ model Account {
 }
 
 model User {
-  id            String   @id @default(uuid())
-  account_id    String?  @unique
-  email         String?  @unique
-  password      String?
-  name          String
-  role          String   @default("customer") // customer, admin
-  phone                    String?
+  id                       String    @id @default(uuid())
+  account_id               String?   @unique
+  firebase_uid             String?   @unique
+  email                    String?   @unique
+  password                 String?
+  name                     String    @default("")
+  role                     String    @default("customer") // customer, admin
+  phone                    String?   @unique
+  avatar                   String?
+  date_of_birth            DateTime?
+  gender                   String?
+  is_verified              Boolean   @default(false)
+  membership_status        String    @default("FREE") // FREE, CARE_PLUS, FAMILY_PLUS
+  membership_expiry        DateTime?
   addresses                Json?
   profile_data             Json?
   notification_preferences Json?
-  created_at               DateTime @default(now())
-  updated_at    DateTime @updatedAt
+  created_at               DateTime  @default(now())
+  updated_at               DateTime  @updatedAt
 
-  account       Account? @relation(fields: [account_id], references: [id])
+  account           Account?       @relation(fields: [account_id], references: [id])
+  sessions          UserSession[]
+  family_profiles   FamilyProfile[]
+  memberships       Membership[]
 
-  orders        Order[]
-  prescriptions Prescription[]
+  orders              Order[]
+  prescriptions       Prescription[]
   prescription_orders PrescriptionOrder[]
-  reviews       Review[]
-  return_requests ReturnRequest[]
+  reviews             Review[]
+  return_requests     ReturnRequest[]
   doctor_appointments DoctorAppointment[]
   doctor_reviews      DoctorReview[]
   lab_test_bookings   LabTestBooking[]
 
   @@map("users")
+}
+
+model UserSession {
+  id            String   @id @default(uuid())
+  user_id       String
+  device_id     String
+  platform      String   // web, android, ios
+  refresh_token String   @unique
+  expires_at    DateTime
+  created_at    DateTime @default(now())
+
+  user User @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@index([user_id])
+  @@index([device_id])
+  @@map("user_sessions")
+}
+
+model FamilyProfile {
+  id            String    @id @default(uuid())
+  user_id       String
+  full_name     String
+  relationship  String
+  gender        String?
+  date_of_birth DateTime?
+  blood_group   String?
+  medical_notes String?
+  created_at    DateTime  @default(now())
+  updated_at    DateTime  @updatedAt
+
+  user User @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@index([user_id])
+  @@map("family_profiles")
+}
+
+model Membership {
+  id         String    @id @default(uuid())
+  user_id    String
+  plan       String    // FREE, CARE_PLUS, FAMILY_PLUS
+  status     String    @default("active") // active, expired, cancelled
+  start_date DateTime  @default(now())
+  end_date   DateTime?
+  created_at DateTime  @default(now())
+  updated_at DateTime  @updatedAt
+
+  user User @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@index([user_id])
+  @@map("memberships")
 }
 
 model Vendor {

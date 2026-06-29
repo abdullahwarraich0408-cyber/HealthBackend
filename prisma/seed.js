@@ -351,6 +351,13 @@ async function main() {
 
   const hashedPassword = await bcrypt.hash('password123', 10);
 
+  const upsertAccount = async (email, role) =>
+    prisma.account.upsert({
+      where: { email },
+      update: { password: hashedPassword, role },
+      create: { email, password: hashedPassword, role },
+    });
+
   const admin = await prisma.user.upsert({
     where: { email: 'admin@pharmahub.com' },
     update: {},
@@ -360,6 +367,12 @@ async function main() {
       name: 'Super Admin',
       role: 'admin',
     },
+  });
+
+  const adminAccount = await upsertAccount('admin@pharmahub.com', 'admin');
+  await prisma.user.update({
+    where: { id: admin.id },
+    data: { account_id: adminAccount.id },
   });
 
   const customer = await prisma.user.upsert({
@@ -372,6 +385,12 @@ async function main() {
       role: 'customer',
       addresses: [{ street: '123 Main St', city: 'Metropolis', zip: '12345' }],
     },
+  });
+
+  const customerAccount = await upsertAccount('customer@pharmahub.com', 'customer');
+  await prisma.user.update({
+    where: { id: customer.id },
+    data: { account_id: customerAccount.id },
   });
 
   const vendor = await prisma.vendor.upsert({
@@ -402,6 +421,12 @@ async function main() {
     },
   });
 
+  const vendorAccount = await upsertAccount('vendor@pharmahub.com', 'vendor');
+  await prisma.vendor.update({
+    where: { id: vendor.id },
+    data: { account_id: vendorAccount.id },
+  });
+
   const vendor2 = await prisma.vendor.upsert({
     where: { email: 'vendor2@pharmahub.com' },
     update: {
@@ -428,6 +453,12 @@ async function main() {
       is_online: true,
       average_rating: 4.6,
     },
+  });
+
+  const vendor2Account = await upsertAccount('vendor2@pharmahub.com', 'vendor');
+  await prisma.vendor.update({
+    where: { id: vendor2.id },
+    data: { account_id: vendor2Account.id },
   });
 
   await prisma.orderItem.deleteMany({});
@@ -473,6 +504,12 @@ async function main() {
       password: hashedPassword,
       phone: '+92 300 1234567',
     },
+  });
+
+  const doctorAccount = await upsertAccount('doctor@pharmahub.com', 'doctor');
+  await prisma.doctor.update({
+    where: { id: portalDoctor.id },
+    data: { account_id: doctorAccount.id },
   });
 
   const doctorMap = { [portalDoctorData.name]: portalDoctor };
@@ -556,6 +593,12 @@ async function main() {
       collection_areas: 'Lahore, Karachi, Islamabad, Rawalpindi',
       status: 'approved',
     },
+  });
+
+  const labAccount = await upsertAccount('lab@pharmahub.com', 'lab');
+  await prisma.labPartner.update({
+    where: { id: chughtaiLab.id },
+    data: { account_id: labAccount.id },
   });
 
   for (const test of LAB_TESTS) {

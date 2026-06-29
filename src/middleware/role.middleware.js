@@ -1,12 +1,39 @@
 const AppError = require('../utils/AppError');
+const { protect, restrictTo } = require('./auth.middleware');
 
-const restrictTo = (...roles) => {
-  return (req, res, next) => {
-    if (!roles.includes(req.user.role)) {
-      return next(new AppError('You do not have permission to perform this action', 403));
-    }
-    next();
-  };
+const requireAuth = protect;
+
+const requireRole = (...roles) => restrictTo(...roles);
+
+const requireAdmin = restrictTo('admin');
+const requireCustomer = restrictTo('customer', 'admin');
+const requireDoctor = restrictTo('doctor', 'admin');
+const requirePharmacy = restrictTo('vendor', 'admin');
+const requireLab = restrictTo('lab', 'admin');
+const requireHospital = restrictTo('hospital', 'admin');
+
+const optionalAuth = (req, res, next) => {
+  const hasBearer =
+    req.headers.authorization && req.headers.authorization.startsWith('Bearer');
+  const hasCookie = req.cookies?.accessToken;
+
+  if (!hasBearer && !hasCookie) {
+    return next();
+  }
+
+  return protect(req, res, next);
 };
 
-module.exports = { restrictTo };
+module.exports = {
+  protect,
+  restrictTo,
+  requireAuth,
+  requireRole,
+  requireAdmin,
+  requireCustomer,
+  requireDoctor,
+  requirePharmacy,
+  requireLab,
+  requireHospital,
+  optionalAuth,
+};

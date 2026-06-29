@@ -77,6 +77,10 @@ const loginUser = async (email, password) => {
     throw new AppError('Account is disabled', 403);
   }
 
+  if (!account.password) {
+    throw new AppError('This account uses phone or social login. Please sign in with OTP or Google.', 400);
+  }
+
   const isMatch = await comparePassword(password, account.password);
   if (!isMatch) {
     throw new AppError('Invalid email or password', 401);
@@ -201,6 +205,25 @@ const resetPassword = async (token, newPassword) => {
 
 const isApprovedPartnerStatus = (status) => ['approved', 'active'].includes(status);
 
+const PARTNER_PORTALS = ['vendor', 'doctor', 'lab'];
+const PORTAL_LABELS = { vendor: 'Vendor', doctor: 'Doctor', lab: 'Lab' };
+
+const assertPartnerPortalAccess = (portal, accountRole) => {
+  if (accountRole === portal) return;
+
+  if (PARTNER_PORTALS.includes(accountRole)) {
+    throw new AppError(
+      `This email is registered as a ${PORTAL_LABELS[accountRole]} account. Please use the ${PORTAL_LABELS[accountRole]} portal to log in.`,
+      400
+    );
+  }
+
+  throw new AppError(
+    'This account cannot access partner portals. Use the customer or admin login instead.',
+    403
+  );
+};
+
 const loginPartner = async (portal, email, password) => {
   const account = await prisma.account.findUnique({ 
     where: { email: email.trim().toLowerCase() },
@@ -212,9 +235,7 @@ const loginPartner = async (portal, email, password) => {
     return await legacyLoginPartner(portal, email, password);
   }
 
-  if (portal === 'vendor' && account.role !== 'vendor') throw new AppError('Invalid portal type', 400);
-  if (portal === 'doctor' && account.role !== 'doctor') throw new AppError('Invalid portal type', 400);
-  if (portal === 'lab' && account.role !== 'lab') throw new AppError('Invalid portal type', 400);
+  assertPartnerPortalAccess(portal, account.role);
 
   const isMatch = await comparePassword(password, account.password);
   if (!isMatch && portal === 'vendor' && account.vendor?.password) {
@@ -241,7 +262,8 @@ const loginPartner = async (portal, email, password) => {
     }
   } else if (portal === 'doctor') {
     profile = account.doctor;
-    if (!profile?.is_active) throw new AppError('Your account is inactive', 403);
+    if (!profile) throw new AppError('Doctor profile not found for this account', 403);
+    if (!profile.is_active) throw new AppError('Your doctor account is inactive. Contact support to reactivate it.', 403);
   } else if (portal === 'lab') {
     profile = account.lab_partner;
     if (!profile) throw new AppError('Lab profile not found for this account', 403);

@@ -12,8 +12,8 @@ const server = http.createServer(app);
 socketServer.init(server);
 registerSockets();
 
-// Start server
-server.listen(PORT, () => {
+// Listen on all interfaces so phones on the same Wi‑Fi can reach the API
+server.listen(PORT, '0.0.0.0', () => {
   logger.info(`Server running on port ${PORT} in ${config.env.NODE_ENV} mode`);
 });
 
