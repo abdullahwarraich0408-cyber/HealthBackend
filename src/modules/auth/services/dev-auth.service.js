@@ -55,8 +55,9 @@ async function findOrCreateDevUser(phone) {
 }
 
 async function authenticateDevTestLogin(phone, code, meta, res) {
-  if (env.NODE_ENV === 'production') {
-    throw new AppError('Dev login is not available in production', 403);
+  const testAuthAllowed = env.NODE_ENV !== 'production' || env.ENABLE_TEST_AUTH;
+  if (!testAuthAllowed) {
+    throw new AppError('Test login is not available', 403);
   }
 
   const match = findDevTestAccount(phone, code);

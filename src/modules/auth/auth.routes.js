@@ -17,7 +17,7 @@ router.post('/firebase', otpRateLimiter, validate(authValidator.firebaseAuthSche
 router.post('/google', authRateLimiter, validate(authValidator.googleAuthSchema), authController.googleLogin);
 router.post('/apple', authRateLimiter, validate(authValidator.appleAuthSchema), authController.appleLogin);
 
-if (process.env.NODE_ENV !== 'production') {
+if (process.env.NODE_ENV !== 'production' || process.env.ENABLE_TEST_AUTH === 'true') {
   router.post('/dev-login', authRateLimiter, validate(authValidator.devLoginSchema), authController.devLogin);
 }
 
