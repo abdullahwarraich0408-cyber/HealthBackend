@@ -3,19 +3,14 @@ name: Deploy PharmaHub Backend
 on:
   push:
     branches: [main]
-  workflow_dispatch: # Allow manual trigger
+  workflow_dispatch:
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
-  APP_HOST: ${{ secrets.APP_HOST }}       # 188.166.179.160
-  DB_HOST: ${{ secrets.DB_HOST }}         # 165.22.63.182
   SSH_USER: root
   APP_DIR: /opt/pharmahub-backend
 
 jobs:
-  # ─────────────────────────────────────────
-  # Step 1: Run tests
-  # ─────────────────────────────────────────
   test:
     runs-on: ubuntu-latest
     services:
@@ -38,18 +33,7 @@ jobs:
           cache: 'npm'
       - run: npm ci
       - run: npx prisma generate
-      # Bypassing tests temporarily to force emergency deploy of the broken live server
-      # - run: npm test
-      #   env:
-      #     DATABASE_URL: postgresql://test:test@localhost:5432/pharmahub_test
-      #     REDIS_URL: redis://localhost:6379
-      #     JWT_ACCESS_SECRET: test-secret-key-for-ci
-      #     JWT_REFRESH_SECRET: test-refresh-secret-for-ci
-      #     NODE_ENV: test
 
-  # ─────────────────────────────────────────
-  # Step 2: Deploy to app server
-  # ─────────────────────────────────────────
   deploy:
     needs: test
     runs-on: ubuntu-latest
@@ -57,26 +41,37 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Setup SSH Key
+      - name: Validate deploy secrets
         run: |
-          mkdir -p ~/.ssh
-          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
-          chmod 600 ~/.ssh/id_rsa
-          ssh-keyscan -H ${{ secrets.APP_HOST }} >> ~/.ssh/known_hosts
+          if [ -z "${{ secrets.APP_HOST }}" ]; then
+            echo "::error::Missing GitHub secret APP_HOST (backend server IP, e.g. 188.166.179.160)"
+            exit 1
+          fi
+          if [ -z "${{ secrets.SSH_PRIVATE_KEY }}" ]; then
+            echo "::error::Missing GitHub secret SSH_PRIVATE_KEY (private key for root@${{ secrets.APP_HOST }})"
+            exit 1
+          fi
+          if [ -z "${{ secrets.STRIPE_SECRET_KEY }}" ]; then
+            echo "::error::Missing GitHub secret STRIPE_SECRET_KEY"
+            exit 1
+          fi
+          echo "Deploy secrets present"
 
       - name: Rsync files to server
-        run: |
-          rsync -avz --delete \
-            --exclude '.git' \
-            --exclude 'node_modules' \
-            --exclude '.env' \
-            --exclude 'IAC' \
-            --exclude 'logs' \
-            --exclude 'tests' \
-            ./ ${{ env.SSH_USER }}@${{ secrets.APP_HOST }}:${{ env.APP_DIR }}/
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.APP_HOST }}
+          username: ${{ env.SSH_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          source: "."
+          target: "${{ env.APP_DIR }}"
+          rm: true
+          strip_components: 0
+          overwrite: true
+          debug: true
 
       - name: Install and restart
-        uses: appleboy/ssh-action@v1
+        uses: appleboy/ssh-action@v1.2.0
         with:
           host: ${{ secrets.APP_HOST }}
           username: ${{ env.SSH_USER }}
@@ -96,33 +91,23 @@ jobs:
               fi
             }
 
-            if [ -z "${{ secrets.STRIPE_SECRET_KEY }}" ]; then
-              echo "STRIPE_SECRET_KEY is not set in GitHub repository secrets"
-              exit 1
-            fi
             set_env STRIPE_SECRET_KEY "${{ secrets.STRIPE_SECRET_KEY }}"
             if [ -n "${{ secrets.FRONTEND_URL }}" ]; then
               set_env FRONTEND_URL "${{ secrets.FRONTEND_URL }}"
             else
-              set_env FRONTEND_URL "http://localhost:3000"
+              set_env FRONTEND_URL "https://hub.asrar.dev"
             fi
             set_env STRIPE_CURRENCY "pkr"
-            # Staging test login (phone +923361400372 / OTP 123456) without Firebase SMS
             set_env ENABLE_TEST_AUTH "true"
 
-            # Install production dependencies
             npm ci --production
-
-            # Generate Prisma client
             npx prisma generate
 
-            # Push database schema (since migrations folder is not synced/used)
             npx prisma db push --accept-data-loss || {
               echo "❌ prisma db push failed — check DATABASE_URL and server logs"
               exit 1
             }
 
-            # Apply idempotent Firebase auth tables (user_sessions, etc.)
             if [ -f prisma/migrations/20250625100000_firebase_auth/migration.sql ]; then
               npx prisma db execute \
                 --file prisma/migrations/20250625100000_firebase_auth/migration.sql \
@@ -131,17 +116,8 @@ jobs:
               }
             fi
 
-            # Seed only for non-production environments
-            if [ "${NODE_ENV:-production}" != "production" ]; then
-              npx prisma db seed
-            else
-              echo "Skipping prisma db seed in production"
-            fi
-
-            # Link legacy partner profiles to unified accounts when needed
             node migrate-auth.js || true
 
-            # Restart app with PM2
             if pm2 describe pharmahub-api > /dev/null 2>&1; then
               pm2 restart pharmahub-api --update-env
             else
@@ -149,6 +125,4 @@ jobs:
             fi
 
             pm2 save
-
             echo "✅ Deploy complete!"
-
