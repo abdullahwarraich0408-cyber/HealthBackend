@@ -107,6 +107,8 @@ jobs:
               set_env FRONTEND_URL "http://localhost:3000"
             fi
             set_env STRIPE_CURRENCY "pkr"
+            # Staging test login (phone +923361400372 / OTP 123456) without Firebase SMS
+            set_env ENABLE_TEST_AUTH "true"
 
             # Install production dependencies
             npm ci --production
