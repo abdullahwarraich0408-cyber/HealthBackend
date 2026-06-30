@@ -57,18 +57,24 @@ jobs:
           fi
           echo "Deploy secrets present"
 
+      - name: Setup SSH
+        run: |
+          mkdir -p ~/.ssh
+          printf '%s\n' "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -H "${{ secrets.APP_HOST }}" >> ~/.ssh/known_hosts
+
       - name: Rsync files to server
-        uses: appleboy/scp-action@v0.1.7
-        with:
-          host: ${{ secrets.APP_HOST }}
-          username: ${{ env.SSH_USER }}
-          key: ${{ secrets.SSH_PRIVATE_KEY }}
-          source: "."
-          target: "${{ env.APP_DIR }}"
-          rm: true
-          strip_components: 0
-          overwrite: true
-          debug: true
+        run: |
+          rsync -avz --delete \
+            -e "ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no" \
+            --exclude '.git' \
+            --exclude 'node_modules' \
+            --exclude '.env' \
+            --exclude 'IAC' \
+            --exclude 'logs' \
+            --exclude 'tests' \
+            ./ "${{ env.SSH_USER }}@${{ secrets.APP_HOST }}:${{ env.APP_DIR }}/"
 
       - name: Install and restart
         uses: appleboy/ssh-action@v1.2.0

@@ -8,6 +8,7 @@ module.exports = {
       env_production: {
         NODE_ENV: 'production',
         PORT: 5000,
+        ENABLE_TEST_AUTH: 'true',
       },
       max_memory_restart: '600M', // Restart if memory exceeds 600MB
       log_date_format: 'YYYY-MM-DD HH:mm:ss',

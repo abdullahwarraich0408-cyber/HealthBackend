@@ -2,14 +2,18 @@ const AppError = require('../utils/AppError');
 
 const validate = (schema) => (req, res, next) => {
   try {
-    if (schema.body) {
-      req.body = schema.body.parse(req.body);
+    const bodySchema = schema.shape?.body ?? schema.body;
+    const querySchema = schema.shape?.query ?? schema.query;
+    const paramsSchema = schema.shape?.params ?? schema.params;
+
+    if (bodySchema) {
+      req.body = bodySchema.parse(req.body);
     }
-    if (schema.query) {
-      req.query = schema.query.parse(req.query);
+    if (querySchema) {
+      req.query = querySchema.parse(req.query);
     }
-    if (schema.params) {
-      req.params = schema.params.parse(req.params);
+    if (paramsSchema) {
+      req.params = paramsSchema.parse(req.params);
     }
     next();
   } catch (error) {
