@@ -279,7 +279,7 @@ async function legacyLoginPartner(portal, email, password) {
   if (portal === 'vendor') {
     partner = await prisma.vendor.findUnique({ where: { email } });
     if (!partner) throw new AppError('Invalid email or password', 401);
-    if (partner.status !== 'approved') throw new AppError('Your vendor account is pending approval or has been rejected', 403);
+    if (!isApprovedPartnerStatus(partner.status)) throw new AppError('Your vendor account is pending approval or has been rejected', 403);
   } else if (portal === 'doctor') {
     partner = await prisma.doctor.findUnique({ where: { email } });
     if (!partner || !partner.password) throw new AppError('Invalid email or password', 401);
@@ -287,7 +287,7 @@ async function legacyLoginPartner(portal, email, password) {
   } else if (portal === 'lab') {
     partner = await prisma.labPartner.findUnique({ where: { email } });
     if (!partner) throw new AppError('Invalid email or password', 401);
-    if (partner.status !== 'approved') throw new AppError('Your lab account is pending approval or has been rejected', 403);
+    if (!isApprovedPartnerStatus(partner.status)) throw new AppError('Your lab account is pending approval or has been rejected', 403);
   } else {
     throw new AppError('Invalid portal type', 400);
   }

@@ -100,6 +100,14 @@ const protect = catchAsync(async (req, res, next) => {
     return next(new AppError('Profile not found for this account.', 401));
   }
 
+  if (
+    currentAccount.role === 'vendor' &&
+    profile?.status &&
+    !['approved', 'active'].includes(profile.status)
+  ) {
+    return next(new AppError('Your vendor account is pending approval or suspended.', 403));
+  }
+
   req.user = { ...profile, role: currentAccount.role, accountId: currentAccount.id };
   next();
 });

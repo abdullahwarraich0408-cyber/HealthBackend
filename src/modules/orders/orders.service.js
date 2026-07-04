@@ -1,10 +1,11 @@
 const prisma = require('../../config/database');
 const AppError = require('../../utils/AppError');
-const { notificationQueue } = require('../../queues');
 const { getIO } = require('../../config/socket');
+const inventoryReservationsService = require('./inventory-reservations.service');
+const vendorNotificationsService = require('../notifications/vendor-notifications.service');
+const { recordAuditEntry } = require('../vendors/vendor-audit.service');
 
-const createOrdersFromCart = async (customerId, items, deliveryAddress) => {
-  // 1. Group items by product_id to sum duplicate quantities
+const createOrdersFromCart = async (customerId, items, deliveryAddress, options = {}) => {
   const mergedItemsMap = {};
   for (const item of items) {
     if (mergedItemsMap[item.product_id]) {
@@ -15,39 +16,49 @@ const createOrdersFromCart = async (customerId, items, deliveryAddress) => {
   }
   const mergedItems = Object.values(mergedItemsMap);
 
-  // First, fetch product details to get vendor_ids and true prices
-  const productIds = mergedItems.map(item => item.product_id);
+  const reservationLock = options.reservationLock;
+  let createdReservation = null;
+  if (reservationLock) {
+    await inventoryReservationsService.validateReservationLock(customerId, reservationLock, mergedItems);
+  } else {
+    createdReservation = await inventoryReservationsService.reserveInventory(customerId, mergedItems, {
+      source: 'order_create',
+    });
+  }
+
+  const activeLock = reservationLock || createdReservation?.lock_key || null;
+
+  const productIds = mergedItems.map((item) => item.product_id);
   const products = await prisma.product.findMany({
     where: { id: { in: productIds } },
     include: {
       offers: {
-        where: { is_active: true, start_date: { lte: new Date() }, expiry_date: { gte: new Date() } }
-      }
-    }
+        where: {
+          is_active: true,
+          start_date: { lte: new Date() },
+          expiry_date: { gte: new Date() },
+        },
+      },
+    },
   });
 
   if (products.length !== productIds.length) {
     throw new AppError('One or more products not found', 404);
   }
 
-  // Create a map for quick lookup
   const productMap = {};
-  products.forEach(p => {
-    let finalPrice = p.price;
-    if (p.offers && p.offers.length > 0) {
-      finalPrice = finalPrice - (finalPrice * (p.offers[0].discount_percentage / 100));
+  products.forEach((product) => {
+    let finalPrice = product.price;
+    if (product.offers && product.offers.length > 0) {
+      finalPrice = finalPrice - (finalPrice * (product.offers[0].discount_percentage / 100));
     }
-    productMap[p.id] = { ...p, finalPrice };
+    productMap[product.id] = { ...product, finalPrice };
   });
 
   let globalSubtotal = 0;
-
-  // Group by vendor
   const vendorGroups = {};
   for (const item of mergedItems) {
     const product = productMap[item.product_id];
-    
-    // Check stock
     if (product.stock < item.quantity) {
       throw new AppError(`Not enough stock for ${product.name}`, 400);
     }
@@ -58,7 +69,7 @@ const createOrdersFromCart = async (customerId, items, deliveryAddress) => {
         items: [],
         subtotal: 0,
         total_amount: 0,
-        requires_prescription: false
+        requires_prescription: false,
       };
     }
 
@@ -66,13 +77,12 @@ const createOrdersFromCart = async (customerId, items, deliveryAddress) => {
     group.items.push({
       product_id: item.product_id,
       quantity: item.quantity,
-      unit_price: product.finalPrice
+      unit_price: product.finalPrice,
     });
     const itemSubtotal = product.finalPrice * item.quantity;
     group.subtotal += itemSubtotal;
     globalSubtotal += itemSubtotal;
-    
-    // Basic logic: if category is 'prescription', flag it
+
     if (product.category === 'prescription') {
       group.requires_prescription = true;
     }
@@ -85,7 +95,6 @@ const createOrdersFromCart = async (customerId, items, deliveryAddress) => {
     const group = vendorGroups[vendorId];
     const tax = group.subtotal * 0.05;
     let shipping = 0;
-    // Apply global shipping to the first order to match frontend combined logic
     if (!shippingApplied) {
       shipping = globalShipping;
       shippingApplied = true;
@@ -93,54 +102,87 @@ const createOrdersFromCart = async (customerId, items, deliveryAddress) => {
     group.total_amount = group.subtotal + tax + shipping;
   }
 
-  // 2. Create orders
   const createdOrders = [];
-  
-  // Use Prisma transaction
-  await prisma.$transaction(async (tx) => {
-    for (const vendorId in vendorGroups) {
-      const group = vendorGroups[vendorId];
-      
-      const order = await tx.order.create({
-        data: {
-          customer_id: customerId,
-          vendor_id: group.vendor_id,
-          total_amount: group.total_amount,
-          requires_prescription: group.requires_prescription,
-          delivery_address: deliveryAddress,
-          items: {
-            create: group.items
-          }
-        },
-        include: { items: true }
-      });
-      
-      createdOrders.push(order);
 
-      // Decrement stock
-      for (const item of group.items) {
-        await tx.product.update({
-          where: { id: item.product_id },
-          data: { stock: { decrement: item.quantity } }
+  try {
+    await prisma.$transaction(async (tx) => {
+      for (const vendorId in vendorGroups) {
+        const group = vendorGroups[vendorId];
+
+        const order = await tx.order.create({
+          data: {
+            customer_id: customerId,
+            vendor_id: group.vendor_id,
+            total_amount: group.total_amount,
+            requires_prescription: group.requires_prescription,
+            delivery_address: deliveryAddress,
+            items: {
+              create: group.items,
+            },
+          },
+          include: { items: true },
         });
-      }
-    }
-  });
 
-  // Emitting sockets / queuing notifications
+        createdOrders.push(order);
+
+        for (const item of group.items) {
+          await tx.product.update({
+            where: { id: item.product_id },
+            data: { stock: { decrement: item.quantity } },
+          });
+        }
+
+        if (activeLock) {
+          await tx.inventoryReservation.updateMany({
+            where: {
+              lock_key: activeLock,
+              customer_id: customerId,
+              status: 'active',
+              product_id: { in: group.items.map((item) => item.product_id) },
+            },
+            data: {
+              order_id: order.id,
+              status: 'consumed',
+            },
+          });
+        }
+      }
+    });
+  } catch (error) {
+    if (activeLock) {
+      await inventoryReservationsService.releaseReservationLock(activeLock);
+    }
+    throw error;
+  }
+
   for (const order of createdOrders) {
-    // Notify vendor
     try {
       getIO().emit(`vendor-${order.vendor_id}:new_order`, { orderId: order.id });
-    } catch (e) {
-      // socket not ready or error
+    } catch {
+      // socket not ready
     }
-    
-    // Add to notification queue
-    await notificationQueue.add('order-placed', {
-      orderId: order.id,
-      customerId,
-      vendorId: order.vendor_id
+
+    await vendorNotificationsService.createVendorNotification({
+      vendorId: order.vendor_id,
+      type: 'new_order',
+      title: 'New order received',
+      message: `A new order ${order.id.slice(0, 8)} is waiting for fulfillment.`,
+      data: {
+        orderId: order.id,
+        customerId,
+      },
+    });
+
+    await recordAuditEntry({
+      vendorId: order.vendor_id,
+      userId: customerId,
+      action: 'ORDER_CREATED',
+      entity: 'order',
+      entityId: order.id,
+      details: {
+        total_amount: order.total_amount,
+        item_count: order.items.length,
+      },
     });
   }
 
@@ -193,12 +235,29 @@ const updateOrderStatus = async (orderId, vendorId, status) => {
       orderId, 
       status 
     });
-  } catch (e) {}
+  } catch (e) {
+    // socket not ready
+  }
 
-  await notificationQueue.add('order-status-update', {
-    orderId,
-    customerId: order.customer_id,
-    status
+  await vendorNotificationsService.createVendorNotification({
+    vendorId,
+    type: 'order_status_updated',
+    title: 'Order status updated',
+    message: `Order ${orderId.slice(0, 8)} is now ${status}.`,
+    data: {
+      orderId,
+      customerId: order.customer_id,
+      status,
+    },
+  });
+
+  await recordAuditEntry({
+    vendorId,
+    userId: vendorId,
+    action: 'ORDER_STATUS_UPDATED',
+    entity: 'order',
+    entityId: orderId,
+    details: { status },
   });
 
   return updatedOrder;

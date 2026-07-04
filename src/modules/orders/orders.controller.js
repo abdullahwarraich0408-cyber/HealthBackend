@@ -1,13 +1,23 @@
 const catchAsync = require('../../utils/catchAsync');
 const ordersService = require('./orders.service');
+const inventoryReservationsService = require('./inventory-reservations.service');
 const { sendResponse } = require('../../utils/response');
 const prisma = require('../../config/database');
 const AppError = require('../../utils/AppError');
 
 const createOrder = catchAsync(async (req, res) => {
-  const { items, delivery_address } = req.body;
-  const orders = await ordersService.createOrdersFromCart(req.user.id, items, delivery_address);
+  const { items, delivery_address, reservation_lock } = req.body;
+  const orders = await ordersService.createOrdersFromCart(req.user.id, items, delivery_address, {
+    reservationLock: reservation_lock,
+  });
   sendResponse(res, 201, { orders }, 'Orders created successfully');
+});
+
+const checkoutLock = catchAsync(async (req, res) => {
+  const reservation = await inventoryReservationsService.reserveInventory(req.user.id, req.body.items || [], {
+    source: 'checkout_lock',
+  });
+  sendResponse(res, 201, { reservation }, 'Checkout lock created successfully');
 });
 
 const getMyOrders = catchAsync(async (req, res) => {
@@ -66,6 +76,7 @@ const updateOrderStatus = catchAsync(async (req, res) => {
 
 module.exports = {
   createOrder,
+  checkoutLock,
   getMyOrders,
   getVendorOrders,
   getOrderDetails,

@@ -1,5 +1,6 @@
 const catchAsync = require('../../utils/catchAsync');
 const cartService = require('./cart.service');
+const inventoryReservationsService = require('../orders/inventory-reservations.service');
 const { sendResponse } = require('../../utils/response');
 
 const getCart = catchAsync(async (req, res) => {
@@ -43,6 +44,13 @@ const mergeCart = catchAsync(async (req, res) => {
   sendResponse(res, 200, { cart }, 'Guest cart merged successfully');
 });
 
+const reserveCart = catchAsync(async (req, res) => {
+  const reservation = await inventoryReservationsService.reserveInventory(req.user.id, req.body.items || [], {
+    source: 'cart',
+  });
+  sendResponse(res, 201, { reservation }, 'Inventory reserved successfully');
+});
+
 module.exports = {
   getCart,
   addToCart,
@@ -50,5 +58,6 @@ module.exports = {
   clearCart,
   updateCartItemQuantity,
   removeFromCartByItemId,
-  mergeCart
+  mergeCart,
+  reserveCart,
 };

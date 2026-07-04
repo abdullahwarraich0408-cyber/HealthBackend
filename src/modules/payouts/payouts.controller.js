@@ -1,7 +1,8 @@
 const catchAsync = require('../../utils/catchAsync');
 const prisma = require('../../config/database');
 const { sendResponse } = require('../../utils/response');
-const { payoutQueue } = require('../../queues');
+const vendorFinanceService = require('../vendors/vendor-finance.service');
+const { recordAuditEntry } = require('../vendors/vendor-audit.service');
 
 const getMyPayouts = catchAsync(async (req, res) => {
   const payouts = await prisma.payout.findMany({
@@ -12,12 +13,39 @@ const getMyPayouts = catchAsync(async (req, res) => {
 });
 
 const triggerPayout = catchAsync(async (req, res) => {
-  const { vendorId } = req.body;
-  
-  // Push to BullMQ queue to be handled asynchronously
-  await payoutQueue.add('manual-payout', { vendorId });
+  const { vendorId, periodStart, periodEnd } = req.body;
 
-  sendResponse(res, 202, null, 'Payout job added to queue');
+  const settlement = await vendorFinanceService.createSettlementForVendor(vendorId, {
+    periodStart,
+    periodEnd,
+  });
+
+  if (!settlement) {
+    sendResponse(res, 200, { settlement: null }, 'No unsettled transactions found for this vendor');
+    return;
+  }
+
+  const payout = await prisma.payout.create({
+    data: {
+      vendor_id: vendorId,
+      amount: settlement.net_amount,
+      status: 'completed',
+      gateway_reference: `MANUAL-PAYOUT-${Date.now()}`,
+      payout_date: new Date(),
+    },
+  });
+
+  await vendorFinanceService.releaseSettlement(settlement.id, payout.gateway_reference);
+  await recordAuditEntry({
+    vendorId,
+    userId: req.user.id,
+    action: 'VENDOR_PAYOUT_TRIGGERED',
+    entity: 'vendor_settlement',
+    entityId: settlement.id,
+    details: { periodStart, periodEnd },
+  });
+
+  sendResponse(res, 202, { settlement, payout }, 'Payout processed successfully');
 });
 
 module.exports = {

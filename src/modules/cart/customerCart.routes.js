@@ -15,6 +15,7 @@ router.get('/', cartController.getCart);
 
 // POST /api/customer/cart – add item to cart
 router.post('/', validate(cartValidator.addToCartSchema), cartController.addToCart);
+router.post('/reserve', validate(cartValidator.reserveCartSchema), cartController.reserveCart);
 
 // PUT /api/customer/cart/:itemId – update quantity
 router.put('/:itemId', validate(cartValidator.updateCartItemSchema), cartController.updateCartItemQuantity);

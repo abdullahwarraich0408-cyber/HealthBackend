@@ -9,8 +9,28 @@ const adminPracticeLocationService = require('./adminPracticeLocation.service');
 const hospitalsController = require('../hospitals/hospitals.controller');
 const hospitalsValidator = require('../hospitals/hospitals.validator');
 const { validate } = require('../../middleware/validate.middleware');
+const vendorsService = require('../vendors/vendors.service');
+const vendorFinanceService = require('../vendors/vendor-finance.service');
+const { recordAuditEntry } = require('../vendors/vendor-audit.service');
 
 router.use(protect, restrictTo('admin'));
+
+function summarizeVendorDocuments(documents = []) {
+  const summary = {
+    total: documents.length,
+    verified: 0,
+    pending: 0,
+    rejected: 0,
+  };
+
+  for (const document of documents) {
+    if (document.status === 'verified') summary.verified += 1;
+    else if (document.status === 'rejected') summary.rejected += 1;
+    else summary.pending += 1;
+  }
+
+  return summary;
+}
 
 router.get('/dashboard', catchAsync(async (req, res) => {
   const userCount = await prisma.user.count();
@@ -125,7 +145,19 @@ router.get('/vendors', catchAsync(async (req, res) => {
   const vendors = await prisma.vendor.findMany({
     orderBy: { created_at: 'desc' },
     include: {
-      account: { select: { email: true } }
+      account: { select: { email: true } },
+      documents: {
+        include: {
+          reviews: {
+            orderBy: { created_at: 'desc' },
+            take: 1,
+          },
+        },
+      },
+      service_areas: {
+        where: { is_active: true },
+      },
+      operating_hours: true,
     }
   });
 
@@ -138,10 +170,64 @@ router.get('/vendors', catchAsync(async (req, res) => {
     commission_rate: vendor.commission_rate,
     trade_license_url: vendor.trade_license_url,
     pharmacist_certificate_url: vendor.pharmacist_certificate_url,
-    created_at: vendor.created_at
+    ntn: vendor.ntn,
+    address: vendor.address,
+    city: vendor.city,
+    latitude: vendor.latitude,
+    longitude: vendor.longitude,
+    service_radius_km: vendor.service_radius_km,
+    is_open: vendor.is_open,
+    is_online: vendor.is_online,
+    holiday_mode_enabled: vendor.holiday_mode_enabled,
+    holiday_starts_at: vendor.holiday_starts_at,
+    holiday_ends_at: vendor.holiday_ends_at,
+    holiday_reason: vendor.holiday_reason,
+    manual_online_override: vendor.manual_online_override,
+    onboarding_submitted_at: vendor.onboarding_submitted_at,
+    approved_at: vendor.approved_at,
+    document_summary: summarizeVendorDocuments(vendor.documents || []),
+    documents: (vendor.documents || []).map((document) => ({
+      id: document.id,
+      type: document.type,
+      file_url: document.file_url,
+      status: document.status,
+      rejection_reason: document.rejection_reason,
+      verified_at: document.verified_at,
+      latest_review: document.reviews?.[0] || null,
+    })),
+    service_areas: vendor.service_areas || [],
+    operating_hours: vendor.operating_hours || [],
+    created_at: vendor.created_at,
   }));
 
   res.json({ status: 'success', data: { vendors: mappedVendors } });
+}));
+
+router.get('/vendors/pending', catchAsync(async (req, res) => {
+  const vendors = await prisma.vendor.findMany({
+    where: {
+      status: { in: ['pending', 'pending_review', 'rejected'] },
+    },
+    orderBy: { onboarding_submitted_at: 'desc' },
+    include: {
+      account: { select: { email: true } },
+      documents: true,
+    },
+  });
+
+  res.json({
+    status: 'success',
+    data: {
+      vendors: vendors.map((vendor) => ({
+        id: vendor.id,
+        business_name: vendor.business_name,
+        email: vendor.account?.email || vendor.email,
+        status: vendor.status,
+        onboarding_submitted_at: vendor.onboarding_submitted_at,
+        document_summary: summarizeVendorDocuments(vendor.documents || []),
+      })),
+    },
+  });
 }));
 
 router.post('/vendors', catchAsync(async (req, res) => {
@@ -189,6 +275,8 @@ router.post('/vendors', catchAsync(async (req, res) => {
           license_number: license_number || 'PENDING',
           commission_rate: parseFloat(commission_rate || 10.0),
           status: 'approved',
+          approved_at: new Date(),
+          last_status_change_at: new Date(),
           address: address || null,
           city: city || null,
           latitude: latitude != null ? Number(latitude) : null,
@@ -217,34 +305,80 @@ router.patch('/vendors/:id/status', catchAsync(async (req, res) => {
   const { id } = req.params;
   const { status, note } = req.body; // status: 'approved', 'rejected', 'suspended'
 
-  if (!['approved', 'rejected', 'suspended', 'active'].includes(status)) {
+  if (!['approved', 'rejected', 'suspended', 'active', 'pending_review'].includes(status)) {
     return res.status(400).json({ status: 'error', message: 'Invalid status' });
   }
 
   const vendor = await prisma.vendor.update({
     where: { id },
-    data: { status }
+    data: {
+      status,
+      approved_at: ['approved', 'active'].includes(status) ? new Date() : null,
+      last_status_change_at: new Date(),
+    }
   });
 
-  // Optionally log the note to audit logs here
-  if (note) {
-    await prisma.auditLog.create({
-      data: {
-        action: `VENDOR_${status.toUpperCase()}`,
-        entity: 'vendor',
-        entity_id: id,
-        details: { note },
-        user_id: req.user.id
-      }
-    });
-  }
+  await recordAuditEntry({
+    vendorId: id,
+    userId: req.user.id,
+    action: `VENDOR_${status.toUpperCase()}`,
+    entity: 'vendor',
+    entityId: id,
+    details: note ? { note } : { status },
+  });
 
   res.json({ status: 'success', message: `Vendor marked as ${status}`, data: { vendor } });
 }));
 
+router.patch('/vendors/:id/approval', catchAsync(async (req, res) => {
+  const { id } = req.params;
+  const { status = 'approved', note } = req.body;
+
+  if (!['approved', 'rejected', 'suspended', 'pending_review'].includes(status)) {
+    return res.status(400).json({ status: 'error', message: 'Invalid approval status' });
+  }
+
+  const vendor = await prisma.vendor.update({
+    where: { id },
+    data: {
+      status,
+      approved_at: status === 'approved' ? new Date() : null,
+      last_status_change_at: new Date(),
+    },
+  });
+
+  await recordAuditEntry({
+    vendorId: id,
+    userId: req.user.id,
+    action: 'VENDOR_APPROVAL_REVIEWED',
+    entity: 'vendor',
+    entityId: id,
+    details: { status, note },
+  });
+
+  res.json({ status: 'success', data: { vendor } });
+}));
+
 router.patch('/vendors/:id/credentials', catchAsync(async (req, res) => {
   const { id } = req.params;
-  const { business_name, email, password, license_number, commission_rate, trade_license_url, pharmacist_certificate_url } = req.body;
+  const {
+    business_name,
+    email,
+    password,
+    license_number,
+    commission_rate,
+    trade_license_url,
+    pharmacist_certificate_url,
+    ntn,
+    bank_account_title,
+    bank_account_number,
+    bank_name,
+    address,
+    city,
+    latitude,
+    longitude,
+    service_radius_km,
+  } = req.body;
 
   const vendor = await prisma.vendor.findUnique({
     where: { id },
@@ -261,6 +395,15 @@ router.patch('/vendors/:id/credentials', catchAsync(async (req, res) => {
   if (commission_rate !== undefined) vendorUpdateData.commission_rate = parseFloat(commission_rate);
   if (trade_license_url !== undefined) vendorUpdateData.trade_license_url = trade_license_url;
   if (pharmacist_certificate_url !== undefined) vendorUpdateData.pharmacist_certificate_url = pharmacist_certificate_url;
+  if (ntn !== undefined) vendorUpdateData.ntn = ntn || null;
+  if (bank_account_title !== undefined) vendorUpdateData.bank_account_title = bank_account_title || null;
+  if (bank_account_number !== undefined) vendorUpdateData.bank_account_number = bank_account_number || null;
+  if (bank_name !== undefined) vendorUpdateData.bank_name = bank_name || null;
+  if (address !== undefined) vendorUpdateData.address = address || null;
+  if (city !== undefined) vendorUpdateData.city = city || null;
+  if (latitude !== undefined) vendorUpdateData.latitude = latitude !== null && latitude !== '' ? Number(latitude) : null;
+  if (longitude !== undefined) vendorUpdateData.longitude = longitude !== null && longitude !== '' ? Number(longitude) : null;
+  if (service_radius_km !== undefined) vendorUpdateData.service_radius_km = Number(service_radius_km || 10);
 
   const bcrypt = require('bcryptjs');
   const normalizedEmail = email ? email.trim().toLowerCase() : null;
@@ -300,14 +443,13 @@ router.patch('/vendors/:id/credentials', catchAsync(async (req, res) => {
   if (normalizedEmail) updatedFields.push('email');
   if (password) updatedFields.push('password');
 
-  await prisma.auditLog.create({
-    data: {
-      action: 'VENDOR_CREDENTIALS_UPDATED',
-      entity: 'vendor',
-      entity_id: id,
-      details: { updated_fields: updatedFields.filter((field) => field !== 'password') },
-      user_id: req.user.id
-    }
+  await recordAuditEntry({
+    vendorId: id,
+    userId: req.user.id,
+    action: 'VENDOR_CREDENTIALS_UPDATED',
+    entity: 'vendor',
+    entityId: id,
+    details: { updated_fields: updatedFields.filter((field) => field !== 'password') },
   });
 
   res.json({
@@ -349,6 +491,128 @@ router.delete('/vendors/:id', catchAsync(async (req, res) => {
     }
     throw error;
   }
+}));
+
+router.post('/vendors/:id/documents/:documentId/review', catchAsync(async (req, res) => {
+  const { id, documentId } = req.params;
+  const { status, notes } = req.body;
+
+  if (!['verified', 'rejected', 'pending'].includes(status)) {
+    return res.status(400).json({ status: 'error', message: 'Invalid document review status' });
+  }
+
+  const document = await prisma.vendorDocument.findFirst({
+    where: {
+      id: documentId,
+      vendor_id: id,
+    },
+  });
+
+  if (!document) {
+    return res.status(404).json({ status: 'error', message: 'Vendor document not found' });
+  }
+
+  const updatedDocument = await prisma.vendorDocument.update({
+    where: { id: documentId },
+    data: {
+      status,
+      verified_at: status === 'verified' ? new Date() : null,
+      rejection_reason: status === 'rejected' ? (notes || 'Document rejected by admin') : null,
+    },
+  });
+
+  await prisma.vendorDocumentReview.create({
+    data: {
+      document_id: documentId,
+      vendor_id: id,
+      reviewer_id: req.user.id,
+      status,
+      notes: notes || null,
+    },
+  });
+
+  await recordAuditEntry({
+    vendorId: id,
+    userId: req.user.id,
+    action: 'VENDOR_DOCUMENT_REVIEWED',
+    entity: 'vendor_document',
+    entityId: documentId,
+    details: { status, notes, type: document.type },
+  });
+
+  res.json({ status: 'success', data: { document: updatedDocument } });
+}));
+
+router.get('/vendors/:id/availability', catchAsync(async (req, res) => {
+  const availability = await vendorsService.getVendorAvailability(req.params.id);
+  res.json({ status: 'success', data: { availability } });
+}));
+
+router.get('/vendors/:id/audit-logs', catchAsync(async (req, res) => {
+  const logs = await prisma.vendorAuditLog.findMany({
+    where: { vendor_id: req.params.id },
+    orderBy: { created_at: 'desc' },
+    take: 200,
+  });
+  res.json({ status: 'success', data: { logs } });
+}));
+
+router.post('/vendors/:id/commission', catchAsync(async (req, res) => {
+  const { commission_rate } = req.body;
+  const vendor = await prisma.vendor.update({
+    where: { id: req.params.id },
+    data: { commission_rate: parseFloat(commission_rate || 0) },
+  });
+
+  await recordAuditEntry({
+    vendorId: req.params.id,
+    userId: req.user.id,
+    action: 'VENDOR_COMMISSION_UPDATED',
+    entity: 'vendor',
+    entityId: req.params.id,
+    details: { commission_rate: vendor.commission_rate },
+  });
+
+  res.json({ status: 'success', data: { vendor } });
+}));
+
+router.get('/vendors/performance', catchAsync(async (req, res) => {
+  const vendors = await prisma.vendor.findMany({
+    where: { status: { in: ['approved', 'active'] } },
+    select: { id: true, business_name: true },
+    orderBy: { business_name: 'asc' },
+  });
+
+  const performance = await Promise.all(
+    vendors.map(async (vendor) => {
+      const metrics = await vendorsService.getVendorPerformanceMetrics(vendor.id);
+      return {
+        id: vendor.id,
+        business_name: vendor.business_name,
+        ...metrics,
+      };
+    })
+  );
+
+  res.json({ status: 'success', data: { performance } });
+}));
+
+router.get('/settlements', catchAsync(async (req, res) => {
+  const settlements = await vendorFinanceService.listAdminSettlements();
+  res.json({ status: 'success', data: { settlements } });
+}));
+
+router.post('/settlements/:id/release', catchAsync(async (req, res) => {
+  const settlement = await vendorFinanceService.releaseSettlement(req.params.id, req.body.reference);
+  await recordAuditEntry({
+    vendorId: settlement.vendor_id,
+    userId: req.user.id,
+    action: 'VENDOR_SETTLEMENT_RELEASED',
+    entity: 'vendor_settlement',
+    entityId: settlement.id,
+    details: { reference: req.body.reference || null },
+  });
+  res.json({ status: 'success', data: { settlement } });
 }));
 
 // --- Doctors Management ---

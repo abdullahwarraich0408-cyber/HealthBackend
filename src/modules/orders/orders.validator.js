@@ -7,12 +7,23 @@ const createOrderSchema = z.object({
       quantity: z.number().int().positive(),
       unit_price: z.number().positive() // Depending on design, you might fetch price from DB instead of accepting it from client to prevent manipulation
     })),
+    reservation_lock: z.string().optional(),
     delivery_address: z.object({
       street: z.string(),
       city: z.string(),
       zip: z.string()
     })
   })
+});
+
+const checkoutLockSchema = z.object({
+  body: z.object({
+    items: z.array(z.object({
+      product_id: z.string().optional(),
+      productId: z.string().optional(),
+      quantity: z.number().int().positive(),
+    })).min(1),
+  }),
 });
 
 const updateOrderStatusSchema = z.object({
@@ -23,5 +34,6 @@ const updateOrderStatusSchema = z.object({
 
 module.exports = {
   createOrderSchema,
-  updateOrderStatusSchema
+  updateOrderStatusSchema,
+  checkoutLockSchema,
 };

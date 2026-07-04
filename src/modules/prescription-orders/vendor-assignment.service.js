@@ -1,5 +1,6 @@
 const prisma = require('../../config/database');
 const { haversineKm, resolveCoords, etaMinutes, hasKnownLocation } = require('../../utils/geo');
+const { computeVendorAvailability, serviceAreaMatches } = require('../vendors/vendor-availability.service');
 
 const ACCEPT_TIMEOUT_SEC = 30;
 
@@ -65,13 +66,13 @@ async function getEligibleVendors(order, rejectedIds = []) {
 
   const vendors = await prisma.vendor.findMany({
     where: {
-      status: 'approved',
-      is_open: true,
-      is_online: true,
+      status: { in: ['approved', 'active'] },
       id: { notIn: rejectedIds },
     },
     include: {
       products: { select: { id: true, name: true, formula: true, stock: true, price: true } },
+      operating_hours: true,
+      service_areas: { where: { is_active: true } },
       current_prescription_orders: {
         where: {
           status: {
@@ -85,6 +86,8 @@ async function getEligibleVendors(order, rejectedIds = []) {
 
   return vendors
     .filter((vendor) => hasKnownLocation(vendor))
+    .filter((vendor) => computeVendorAvailability(vendor).isAvailable)
+    .filter((vendor) => serviceAreaMatches(order.delivery_address, vendor.service_areas || []))
     .map((vendor) => {
       const vendorCoords = resolveCoords(vendor);
       if (!vendorCoords) return null;

@@ -1,9 +1,10 @@
 const prisma = require('../../config/database');
 const AppError = require('../../utils/AppError');
 const { getIO } = require('../../config/socket');
-const { etaMinutes, resolveCoords, haversineKm } = require('../../utils/geo');
 const { pickNextVendor, ACCEPT_TIMEOUT_SEC } = require('./vendor-assignment.service');
 const { scheduleAcceptTimeout, clearAcceptTimeout } = require('./accept-timeout.manager');
+const vendorNotificationsService = require('../notifications/vendor-notifications.service');
+const { recordAuditEntry } = require('../vendors/vendor-audit.service');
 
 const ORDER_INCLUDE = {
   items: { include: { product: { select: { id: true, name: true, price: true } } } },
@@ -63,6 +64,14 @@ async function assignToNextVendor(orderId) {
       include: ORDER_INCLUDE,
     });
     emit(`customer-${order.customer_id}:prescription_order`, { orderId, status: 'no_vendor' });
+    await recordAuditEntry({
+      vendorId: null,
+      userId: order.customer_id,
+      action: 'PRESCRIPTION_NO_VENDOR_AVAILABLE',
+      entity: 'prescription_order',
+      entityId: orderId,
+      details: { rejected_vendor_ids: rejectedIds },
+    });
     return updated;
   }
 
@@ -101,6 +110,31 @@ async function assignToNextVendor(orderId) {
     vendor: updated.current_vendor,
   });
 
+  await vendorNotificationsService.createVendorNotification({
+    vendorId: next.vendor.id,
+    type: 'prescription_offer',
+    title: 'New prescription assignment',
+    message: `Prescription order ${orderId.slice(0, 8)} is awaiting your response.`,
+    data: {
+      orderId,
+      timeoutSeconds: ACCEPT_TIMEOUT_SEC,
+      customerId: order.customer_id,
+    },
+  });
+
+  await recordAuditEntry({
+    vendorId: next.vendor.id,
+    userId: order.customer_id,
+    action: 'PRESCRIPTION_ORDER_OFFERED',
+    entity: 'prescription_order',
+    entityId: orderId,
+    details: {
+      score: next.score,
+      eta_minutes: next.eta_minutes,
+      distance_km: next.distanceKm,
+    },
+  });
+
   await scheduleAcceptTimeout(orderId);
   return updated;
 }
@@ -134,6 +168,18 @@ async function createPrescriptionOrder(customerId, payload) {
     include: ORDER_INCLUDE,
   });
 
+  await recordAuditEntry({
+    vendorId: null,
+    userId: customerId,
+    action: 'PRESCRIPTION_ORDER_CREATED',
+    entity: 'prescription_order',
+    entityId: order.id,
+    details: {
+      delivery_type: order.delivery_type,
+      medicine_count: order.medicine_count,
+    },
+  });
+
   return assignToNextVendor(order.id);
 }
 
@@ -162,6 +208,14 @@ async function handleAcceptTimeout(orderId) {
   });
 
   emit(`vendor-${order.current_vendor_id}:prescription_order_expired`, { orderId });
+  await recordAuditEntry({
+    vendorId: order.current_vendor_id,
+    userId: null,
+    action: 'PRESCRIPTION_ORDER_TIMEOUT',
+    entity: 'prescription_order',
+    entityId: orderId,
+    details: {},
+  });
   await assignToNextVendor(orderId);
 }
 
@@ -187,6 +241,21 @@ async function vendorRespond(orderId, vendorId, action) {
         status: 'finding_vendor',
       },
     });
+    await vendorNotificationsService.createVendorNotification({
+      vendorId,
+      type: 'prescription_declined',
+      title: 'Prescription declined',
+      message: `You declined prescription order ${orderId.slice(0, 8)}.`,
+      data: { orderId },
+    });
+    await recordAuditEntry({
+      vendorId,
+      userId: vendorId,
+      action: 'PRESCRIPTION_ORDER_DECLINED',
+      entity: 'prescription_order',
+      entityId: orderId,
+      details: {},
+    });
     return assignToNextVendor(orderId);
   }
 
@@ -206,6 +275,21 @@ async function vendorRespond(orderId, vendorId, action) {
   });
 
   emit(`customer-${order.customer_id}:prescription_order`, { orderId, status: 'accepted' });
+  await vendorNotificationsService.createVendorNotification({
+    vendorId,
+    type: 'prescription_accepted',
+    title: 'Prescription accepted',
+    message: `You accepted prescription order ${orderId.slice(0, 8)}.`,
+    data: { orderId },
+  });
+  await recordAuditEntry({
+    vendorId,
+    userId: vendorId,
+    action: 'PRESCRIPTION_ORDER_ACCEPTED',
+    entity: 'prescription_order',
+    entityId: orderId,
+    details: {},
+  });
   return updated;
 }
 
@@ -297,6 +381,17 @@ async function confirmStock(orderId, vendorId, payload) {
     });
   }
 
+  await recordAuditEntry({
+    vendorId,
+    userId: vendorId,
+    action: 'PRESCRIPTION_STOCK_CONFIRMED',
+    entity: 'prescription_order',
+    entityId: orderId,
+    details: {
+      stock_status: resolvedStockStatus,
+    },
+  });
+
   return prisma.prescriptionOrder.findUnique({ where: { id: orderId }, include: ORDER_INCLUDE });
 }
 
@@ -336,6 +431,14 @@ async function updateDeliveryStatus(orderId, vendorId, status) {
   });
 
   emit(`customer-${order.customer_id}:prescription_order`, { orderId, status });
+  await recordAuditEntry({
+    vendorId,
+    userId: vendorId,
+    action: 'PRESCRIPTION_DELIVERY_STATUS_UPDATED',
+    entity: 'prescription_order',
+    entityId: orderId,
+    details: { status },
+  });
   return updated;
 }
 

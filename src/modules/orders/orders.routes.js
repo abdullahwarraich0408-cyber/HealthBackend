@@ -9,6 +9,7 @@ const { restrictTo } = require('../../middleware/role.middleware');
 router.use(protect);
 
 // Customers
+router.post('/checkout-lock', restrictTo('customer'), validate(ordersValidator.checkoutLockSchema), ordersController.checkoutLock);
 router.post('/', restrictTo('customer'), validate(ordersValidator.createOrderSchema), ordersController.createOrder);
 router.get('/', ordersController.getMyOrders);
 

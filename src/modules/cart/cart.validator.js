@@ -28,8 +28,21 @@ const mergeCartSchema = z.object({
   })
 });
 
+const reserveCartSchema = z.object({
+  body: z.object({
+    items: z.array(
+      z.object({
+        product_id: z.string().optional(),
+        productId: z.string().optional(),
+        quantity: z.number().int().positive(),
+      })
+    ).min(1),
+  }),
+});
+
 module.exports = {
   addToCartSchema,
   updateCartItemSchema,
-  mergeCartSchema
+  mergeCartSchema,
+  reserveCartSchema,
 };

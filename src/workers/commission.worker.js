@@ -21,7 +21,8 @@ const commissionWorker = new Worker('commissions', async (job) => {
       order_id: order.id,
       vendor_id: order.vendor_id,
       amount: commissionAmount,
-      rate_applied: commissionRate
+      rate_applied: commissionRate,
+      status: 'pending_settlement',
     }
   });
 

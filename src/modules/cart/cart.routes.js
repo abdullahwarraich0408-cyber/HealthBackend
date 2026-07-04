@@ -11,6 +11,7 @@ router.use(restrictTo('customer'));
 
 router.get('/', cartController.getCart);
 router.post('/', validate(cartValidator.addToCartSchema), cartController.addToCart);
+router.post('/reserve', validate(cartValidator.reserveCartSchema), cartController.reserveCart);
 router.delete('/:product_id', cartController.removeFromCart);
 router.delete('/', cartController.clearCart);
 

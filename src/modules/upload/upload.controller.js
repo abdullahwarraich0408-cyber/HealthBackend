@@ -17,7 +17,15 @@ const uploadDocument = catchAsync(async (req, res) => {
   sendResponse(res, 200, { url }, 'Document uploaded successfully');
 });
 
+const uploadPublicDocument = catchAsync(async (req, res) => {
+  if (!req.file) throw new AppError('No document file provided', 400);
+
+  const url = await storageService.uploadFile(req.file.buffer, req.file.originalname, 'public-documents', req.file.mimetype);
+  sendResponse(res, 200, { url }, 'Public document uploaded successfully');
+});
+
 module.exports = {
   uploadImage,
-  uploadDocument
+  uploadDocument,
+  uploadPublicDocument,
 };
