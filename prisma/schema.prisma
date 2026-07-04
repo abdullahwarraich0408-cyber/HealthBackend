@@ -58,6 +58,7 @@ model User {
   doctor_appointments DoctorAppointment[]
   doctor_reviews      DoctorReview[]
   lab_test_bookings   LabTestBooking[]
+  inventory_reservations InventoryReservation[]
 
   @@map("users")
 }
@@ -184,6 +185,11 @@ model Product {
   stock       Int      @default(0)
   image_url   String?
   category    String?
+  approval_status String   @default("pending_review")
+  review_note     String?
+  approved_at     DateTime?
+  reviewed_at     DateTime?
+  reviewed_by_account_id String?
   created_at  DateTime @default(now())
   updated_at  DateTime @updatedAt
 
@@ -195,6 +201,7 @@ model Product {
   offers      Offer[]
   inventory_reservations InventoryReservation[]
 
+  @@index([vendor_id, approval_status])
   @@map("products")
 }
 

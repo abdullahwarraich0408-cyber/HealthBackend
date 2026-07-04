@@ -12,6 +12,8 @@ const { validate } = require('../../middleware/validate.middleware');
 const vendorsService = require('../vendors/vendors.service');
 const vendorFinanceService = require('../vendors/vendor-finance.service');
 const { recordAuditEntry } = require('../vendors/vendor-audit.service');
+const productsService = require('../products/products.service');
+const vendorNotificationsService = require('../notifications/vendor-notifications.service');
 
 router.use(protect, restrictTo('admin'));
 
@@ -86,13 +88,34 @@ router.get('/prescription-orders', catchAsync(async (req, res) => {
 }));
 
 router.get('/products', catchAsync(async (req, res) => {
-  const products = await prisma.product.findMany({
-    orderBy: { created_at: 'desc' },
-    include: {
-      vendor: { select: { business_name: true } }
-    }
-  });
+  const products = await productsService.getAdminProducts();
   res.json({ status: 'success', data: { products } });
+}));
+
+router.patch('/products/:id/review', catchAsync(async (req, res) => {
+  const { id } = req.params;
+  const { approval_status, note } = req.body;
+
+  const product = await productsService.reviewProduct(id, req.user.accountId || req.user.id, approval_status, note);
+
+  await vendorNotificationsService.createVendorNotification({
+    vendorId: product.vendor_id,
+    type: approval_status === 'approved' ? 'product-approved' : approval_status === 'rejected' ? 'product-rejected' : 'product-review-updated',
+    title: approval_status === 'approved' ? 'Product approved' : approval_status === 'rejected' ? 'Product requires changes' : 'Product review updated',
+    message:
+      approval_status === 'approved'
+        ? `${product.name} is now live on the marketplace.`
+        : approval_status === 'rejected'
+          ? `${product.name} was rejected${note ? `: ${note}` : '.'}`
+          : `${product.name} has been moved back to review.`,
+    data: {
+      productId: product.id,
+      approval_status,
+      note: note || null,
+    },
+  });
+
+  res.json({ status: 'success', data: { product } });
 }));
 
 // Marketing Routes
@@ -274,24 +297,26 @@ router.post('/vendors', catchAsync(async (req, res) => {
           email: normalizedEmail,
           license_number: license_number || 'PENDING',
           commission_rate: parseFloat(commission_rate || 10.0),
-          status: 'approved',
-          approved_at: new Date(),
+          status: 'pending_review',
+          approved_at: null,
           last_status_change_at: new Date(),
           address: address || null,
           city: city || null,
           latitude: latitude != null ? Number(latitude) : null,
           longitude: longitude != null ? Number(longitude) : null,
           service_radius_km: service_radius_km != null ? Number(service_radius_km) : 10,
+          onboarding_submitted_at: new Date(),
         }
       }
     },
     include: { vendor: true }
   });
   await prisma.auditLog.create({
-    data: { action: 'VENDOR_CREATED', entity: 'vendor', entity_id: account.vendor.id, user_id: req.user.id }
+    data: { action: 'VENDOR_CREATED_PENDING_REVIEW', entity: 'vendor', entity_id: account.vendor.id, user_id: req.user.id }
   });
   res.json({
     status: 'success',
+    message: 'Vendor created and submitted for verification review.',
     data: {
       vendor: {
         ...account.vendor,

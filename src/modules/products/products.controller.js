@@ -4,7 +4,7 @@ const { sendResponse } = require('../../utils/response');
 
 const createProduct = catchAsync(async (req, res) => {
   const product = await productsService.createProduct(req.user.id, req.body);
-  sendResponse(res, 201, { product }, 'Product created successfully');
+  sendResponse(res, 201, { product }, 'Product submitted successfully and is pending review');
 });
 
 const getProducts = catchAsync(async (req, res) => {

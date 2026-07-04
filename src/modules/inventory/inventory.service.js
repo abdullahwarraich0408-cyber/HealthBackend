@@ -69,7 +69,12 @@ const bulkImport = async (vendorId, csvText) => {
         description,
         price,
         stock,
-        category
+        category,
+        approval_status: 'pending_review',
+        review_note: null,
+        approved_at: null,
+        reviewed_at: null,
+        reviewed_by_account_id: null,
       }
     });
     importedProducts.push(product);
