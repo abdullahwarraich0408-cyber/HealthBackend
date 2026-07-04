@@ -1,5 +1,4 @@
 const { signAccessToken, signRefreshToken } = require('./jwt.service');
-const { createSession } = require('./session.service');
 const { setTokenCookies } = require('../auth.helper');
 const crypto = require('crypto');
 
@@ -23,7 +22,7 @@ function serializeUser(user, account) {
   };
 }
 
-async function issueSession(user, account, meta, res) {
+async function issueSession(user, account, meta, res, cookieOptions = {}) {
   const sessionId = crypto.randomUUID();
 
   const tokenPayload = {
@@ -41,7 +40,7 @@ async function issueSession(user, account, meta, res) {
   const tokens = { accessToken, refreshToken };
 
   if (res) {
-    setTokenCookies(res, accessToken, refreshToken);
+    setTokenCookies(res, accessToken, refreshToken, cookieOptions);
   }
 
   return {

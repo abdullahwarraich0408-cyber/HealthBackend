@@ -30,13 +30,16 @@ const generatePartnerTokens = (partner, role) => {
   return generateTokens({ id: partner.id, role, accountId: partner.accountId });
 };
 
-const setTokenCookies = (res, accessToken, refreshToken) => {
-  res.cookie('accessToken', accessToken, {
-    httpOnly: true,
-    secure: env.NODE_ENV === 'production',
-    sameSite: env.NODE_ENV === 'production' ? 'none' : 'lax',
-    maxAge: 15 * 60 * 1000, // 15 mins
-  });
+const setTokenCookies = (res, accessToken, refreshToken, options = {}) => {
+  const { includeAccessToken = true } = options;
+  if (includeAccessToken) {
+    res.cookie('accessToken', accessToken, {
+      httpOnly: true,
+      secure: env.NODE_ENV === 'production',
+      sameSite: env.NODE_ENV === 'production' ? 'none' : 'lax',
+      maxAge: 15 * 60 * 1000, // 15 mins
+    });
+  }
 
   res.cookie('refreshToken', refreshToken, {
     httpOnly: true,

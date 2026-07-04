@@ -144,7 +144,7 @@ async function authenticateWithFirebaseIdToken(idToken, meta, res) {
     throw new AppError('Account is disabled', 403);
   }
 
-  return issueSession(user, account, meta, res);
+  return issueSession(user, account, meta, res, { includeAccessToken: false });
 }
 
 async function authenticateWithGoogleIdToken(idToken, meta, res) {

@@ -21,9 +21,8 @@ async function refreshAuthSession(refreshToken, meta, res) {
     throw new AppError('No refresh token provided', 401);
   }
 
-  let decoded;
   try {
-    decoded = verifyRefreshToken(refreshToken);
+    verifyRefreshToken(refreshToken);
   } catch {
     throw new AppError('Invalid refresh token', 401);
   }
@@ -67,7 +66,7 @@ async function refreshAuthSession(refreshToken, meta, res) {
   const tokens = { accessToken, refreshToken: newRefreshToken };
 
   if (res) {
-    setTokenCookies(res, accessToken, newRefreshToken);
+    setTokenCookies(res, accessToken, newRefreshToken, { includeAccessToken: false });
   }
 
   return { tokens, user: serializeUser(user, account) };

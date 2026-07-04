@@ -5,6 +5,9 @@ const registerSchema = z.object({
     email: z.string().email(),
     password: z.string().min(8),
     name: z.string().min(2),
+    phone: z.string().optional(),
+    deviceId: z.string().optional(),
+    platform: z.enum(['web', 'android', 'ios']).optional(),
     role: z.enum(['customer']).optional(),
   })
 });
@@ -12,7 +15,9 @@ const registerSchema = z.object({
 const loginSchema = z.object({
   body: z.object({
     email: z.string().email(),
-    password: z.string()
+    password: z.string(),
+    deviceId: z.string().optional(),
+    platform: z.enum(['web', 'android', 'ios']).optional(),
   })
 });
 
@@ -37,7 +42,6 @@ const appleAuthSchema = firebaseAuthSchema;
 
 const refreshSchema = z.object({
   body: z.object({
-    refreshToken: z.string().optional(),
     deviceId: z.string().optional(),
     platform: z.enum(['web', 'android', 'ios']).optional(),
   }).optional(),

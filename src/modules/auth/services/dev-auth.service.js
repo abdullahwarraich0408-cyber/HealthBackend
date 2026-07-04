@@ -118,7 +118,7 @@ async function issueLegacySession(user, account, res) {
   await storeLegacyRefreshToken(user.id, tokens.refreshToken);
 
   if (res) {
-    setTokenCookies(res, tokens.accessToken, tokens.refreshToken);
+    setTokenCookies(res, tokens.accessToken, tokens.refreshToken, { includeAccessToken: false });
   }
 
   return {
@@ -146,7 +146,7 @@ async function authenticateDevTestLogin(phone, code, meta, res) {
   }
 
   try {
-    return await issueSession(user, account, meta, res);
+    return await issueSession(user, account, meta, res, { includeAccessToken: false });
   } catch (err) {
     logger.warn(`Dev login session fallback: ${err.message}`);
     return issueLegacySession(user, account, res);

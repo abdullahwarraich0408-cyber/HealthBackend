@@ -6,6 +6,7 @@ const jwt = require('jsonwebtoken');
 const env = require('../../config/env');
 const crypto = require('crypto');
 const bcrypt = require('bcryptjs');
+const { issueSession } = require('./services/token.service');
 
 const storeRefreshToken = async (userId, refreshToken, value = 'valid') => {
   try {
@@ -20,7 +21,7 @@ const storeRefreshToken = async (userId, refreshToken, value = 'valid') => {
   }
 };
 
-const registerUser = async (data) => {
+const registerUser = async (data, meta, res) => {
   const existingAccount = await prisma.account.findUnique({ where: { email: data.email } });
   if (existingAccount) {
     throw new AppError('Email already in use', 400);
@@ -46,15 +47,10 @@ const registerUser = async (data) => {
     include: { customer: true }
   });
 
-  const tokens = generateTokens({ ...account.customer, accountId: account.id, role: account.role });
-  
-  // Store refresh token in Redis
-  await storeRefreshToken(account.id, tokens.refreshToken);
-
-  return { user: { ...account.customer, accountId: account.id }, tokens };
+  return issueSession(account.customer, account, meta, res, { includeAccessToken: false });
 };
 
-const loginUser = async (email, password) => {
+const loginUser = async (email, password, meta, res) => {
   const account = await prisma.account.findUnique({ 
     where: { email },
     include: { customer: true }
@@ -68,9 +64,7 @@ const loginUser = async (email, password) => {
     const isMatch = await comparePassword(password, legacyUser.password);
     if (!isMatch) throw new AppError('Invalid email or password', 401);
     
-    const tokens = generateTokens(legacyUser);
-    await storeRefreshToken(legacyUser.id, tokens.refreshToken);
-    return { user: legacyUser, tokens };
+    return issueSession(legacyUser, null, meta, res, { includeAccessToken: false });
   }
 
   if (!account.is_active) {
@@ -87,11 +81,11 @@ const loginUser = async (email, password) => {
   }
 
   const profile = account.customer;
-  const tokens = generateTokens({ ...profile, accountId: account.id, role: account.role });
-  
-  await storeRefreshToken(account.id, tokens.refreshToken);
+  if (!profile) {
+    throw new AppError('Customer profile not found for this account', 404);
+  }
 
-  return { user: { ...profile, accountId: account.id, role: account.role }, tokens };
+  return issueSession(profile, account, meta, res, { includeAccessToken: false });
 };
 
 const refreshAuthToken = async (refreshToken) => {

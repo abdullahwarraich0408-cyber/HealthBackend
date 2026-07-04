@@ -7,9 +7,14 @@ const { sendResponse } = require('../../utils/response');
 const { setTokenCookies, clearTokenCookies } = require('./auth.helper');
 
 const register = catchAsync(async (req, res) => {
-  const { user, tokens } = await authService.registerUser(req.body);
-  
-  setTokenCookies(res, tokens.accessToken, tokens.refreshToken);
+  const { user, tokens } = await authService.registerUser(
+    req.body,
+    {
+      deviceId: req.body?.deviceId || req.headers['x-device-id'],
+      platform: req.body?.platform || 'web',
+    },
+    res,
+  );
   
   user.password = undefined;
 
@@ -18,9 +23,15 @@ const register = catchAsync(async (req, res) => {
 
 const login = catchAsync(async (req, res) => {
   const { email, password } = req.body;
-  const { user, tokens } = await authService.loginUser(email, password);
-
-  setTokenCookies(res, tokens.accessToken, tokens.refreshToken);
+  const { user, tokens } = await authService.loginUser(
+    email,
+    password,
+    {
+      deviceId: req.body?.deviceId || req.headers['x-device-id'],
+      platform: req.body?.platform || 'web',
+    },
+    res,
+  );
 
   user.password = undefined;
 
@@ -69,7 +80,7 @@ const devLogin = catchAsync(async (req, res) => {
 });
 
 const refresh = catchAsync(async (req, res) => {
-  const refreshToken = req.cookies.refreshToken || req.body?.refreshToken;
+  const refreshToken = req.cookies.refreshToken;
 
   if (!refreshToken) {
     return res.status(401).json({ status: 'fail', message: 'No refresh token provided' });
@@ -88,7 +99,7 @@ const refresh = catchAsync(async (req, res) => {
 });
 
 const logout = catchAsync(async (req, res) => {
-  const refreshToken = req.cookies.refreshToken || req.body?.refreshToken;
+  const refreshToken = req.cookies.refreshToken;
   
   if (req.user && refreshToken) {
     await authSessionService.logoutSession(req.user.id, refreshToken);
