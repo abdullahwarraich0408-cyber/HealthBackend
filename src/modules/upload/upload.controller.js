@@ -24,8 +24,21 @@ const uploadPublicDocument = catchAsync(async (req, res) => {
   sendResponse(res, 200, { url }, 'Public document uploaded successfully');
 });
 
+const uploadVideo = catchAsync(async (req, res) => {
+  if (!req.file) throw new AppError('No video file provided', 400);
+
+  const url = await storageService.uploadFile(
+    req.file.buffer,
+    req.file.originalname,
+    'community-videos',
+    req.file.mimetype,
+  );
+  sendResponse(res, 200, { url }, 'Video uploaded successfully');
+});
+
 module.exports = {
   uploadImage,
   uploadDocument,
   uploadPublicDocument,
+  uploadVideo,
 };

@@ -1,6 +1,7 @@
 const { randomUUID } = require('crypto');
 const prisma = require('../../config/database');
 const AppError = require('../../utils/AppError');
+const { emitOrderUpdated } = require('../../utils/orderTracking.socket');
 
 const CATEGORIES = [
   { id: 'blood', label: 'Blood', icon: '🩸' },
@@ -421,11 +422,21 @@ const updateBookingStatus = async (labPartnerId, bookingId, status, note) => {
   });
   if (!booking) throw new AppError('Booking not found', 404);
 
-  return prisma.labTestBooking.update({
+  const updated = await prisma.labTestBooking.update({
     where: { id: bookingId },
     data: { status, notes: note ?? booking.notes },
     include: bookingInclude,
   });
+
+  emitOrderUpdated({
+    orderId: updated.id,
+    status: updated.status,
+    type: 'lab',
+    customerId: updated.customer_id,
+    vendorId: updated.lab_partner_id,
+  });
+
+  return updated;
 };
 
 const uploadReport = async (labPartnerId, bookingId, reportUrl) => {

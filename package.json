@@ -6,6 +6,7 @@
   "scripts": {
     "start": "node src/server.js",
     "dev": "nodemon src/server.js",
+    "dev:free-port": "powershell -NoProfile -Command \"$p = Get-NetTCPConnection -LocalPort 5000 -State Listen -ErrorAction SilentlyContinue | Select-Object -ExpandProperty OwningProcess -Unique; if ($p) { $p | ForEach-Object { Stop-Process -Id $_ -Force -ErrorAction SilentlyContinue }; Write-Host 'Freed port 5000' } else { Write-Host 'Port 5000 is free' }\"",
     "test": "jest",
     "lint": "eslint .",
     "format": "prettier --write .",
@@ -37,6 +38,7 @@
     "morgan": "^1.10.0",
     "multer": "^1.4.5-lts.1",
     "nodemailer": "^6.9.4",
+    "openai": "^6.45.0",
     "pdfkit": "^0.13.0",
     "redis": "^4.6.7",
     "resend": "^1.0.0",

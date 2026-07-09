@@ -1,9 +1,18 @@
 const { logger } = require('../utils/logger');
 
-const handleOrderEvents = (socket, io) => {
-  socket.on('subscribe_order', (orderId) => {
-    socket.join(`order-${orderId}`);
-    logger.info(`Socket joined order room: order-${orderId}`);
+function joinOrderRoom(socket, orderId) {
+  if (!orderId) return;
+  const id = String(orderId);
+  socket.join(`order-${id}`);
+  logger.info(`Socket joined order room: order-${id}`);
+}
+
+const handleOrderEvents = (socket) => {
+  socket.on('join_order_room', joinOrderRoom);
+  socket.on('subscribe_order', joinOrderRoom);
+  socket.on('leave_order_room', (orderId) => {
+    if (!orderId) return;
+    socket.leave(`order-${String(orderId)}`);
   });
 };
 

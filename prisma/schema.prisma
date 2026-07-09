@@ -60,6 +60,18 @@ model User {
   lab_test_bookings   LabTestBooking[]
   inventory_reservations InventoryReservation[]
 
+  community_posts          CommunityPost[]
+  community_comments       CommunityComment[]
+  community_post_likes     CommunityPostLike[]
+  group_memberships        GroupMember[]
+  challenge_participations ChallengeParticipant[]
+  buddies_owned            HealthBuddy[] @relation("BuddyOwner")
+  buddies_friend_of        HealthBuddy[] @relation("BuddyFriend")
+  community_profile        CommunityProfile?
+  groups_created           HealthGroup[] @relation("GroupCreator")
+  challenges_created       HealthChallenge[] @relation("ChallengeCreator")
+  family_health_vaults     FamilyHealthVault[]
+
   @@map("users")
 }
 
@@ -69,6 +81,7 @@ model UserSession {
   device_id     String
   platform      String   // web, android, ios
   refresh_token String   @unique
+  fcm_token     String?
   expires_at    DateTime
   created_at    DateTime @default(now())
 
@@ -900,4 +913,365 @@ model LabTestBooking {
   customer             User        @relation(fields: [customer_id], references: [id])
 
   @@map("lab_test_bookings")
+}
+
+model CommunityPost {
+  id                  String   @id @default(uuid())
+  user_id             String
+  group_id            String?
+  post_type           String   @default("text")
+  content             String
+  image_url           String?
+  video_url           String?
+  thumbnail_url       String?
+  category            String   @default("General")
+  is_anonymous        Boolean  @default(false)
+  author_role         String   @default("user")
+  is_verified         Boolean  @default(false)
+  health_contribution Int      @default(5)
+  created_at          DateTime @default(now())
+  updated_at          DateTime @updatedAt
+
+  user     User                @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  group    HealthGroup?        @relation(fields: [group_id], references: [id], onDelete: SetNull)
+  comments CommunityComment[]
+  likes    CommunityPostLike[]
+
+  @@index([user_id])
+  @@index([group_id])
+  @@map("community_posts")
+}
+
+model CommunityComment {
+  id           String   @id @default(uuid())
+  post_id      String
+  user_id      String
+  content      String
+  is_anonymous Boolean  @default(false)
+  created_at   DateTime @default(now())
+
+  post CommunityPost @relation(fields: [post_id], references: [id], onDelete: Cascade)
+  user User          @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@index([post_id])
+  @@map("community_comments")
+}
+
+model CommunityPostLike {
+  post_id    String
+  user_id    String
+  created_at DateTime @default(now())
+
+  post CommunityPost @relation(fields: [post_id], references: [id], onDelete: Cascade)
+  user User          @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@id([post_id, user_id])
+  @@map("community_post_likes")
+}
+
+model HealthGroup {
+  id               String   @id @default(uuid())
+  name             String
+  description      String   @default("")
+  icon             String   @default("account-group")
+  weekly_topic     String?
+  verified_doctors Json?
+  created_by       String
+  created_at       DateTime @default(now())
+  updated_at       DateTime @updatedAt
+
+  creator User            @relation("GroupCreator", fields: [created_by], references: [id])
+  members GroupMember[]
+  posts   CommunityPost[]
+
+  @@map("health_groups")
+}
+
+model GroupMember {
+  id        String   @id @default(uuid())
+  group_id  String
+  user_id   String
+  role      String   @default("member")
+  joined_at DateTime @default(now())
+
+  group HealthGroup @relation(fields: [group_id], references: [id], onDelete: Cascade)
+  user  User        @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@unique([group_id, user_id])
+  @@index([user_id])
+  @@map("group_members")
+}
+
+model HealthChallenge {
+  id            String   @id @default(uuid())
+  title         String
+  description   String   @default("")
+  icon          String   @default("trophy")
+  color         String   @default("#0B6E72")
+  target        Int      @default(100)
+  unit          String   @default("steps")
+  duration_days Int      @default(7)
+  xp_reward     Int      @default(100)
+  badge_name    String   @default("Achiever")
+  created_by    String
+  starts_at     DateTime @default(now())
+  ends_at       DateTime
+  created_at    DateTime @default(now())
+  updated_at    DateTime @updatedAt
+
+  creator      User                   @relation("ChallengeCreator", fields: [created_by], references: [id])
+  participants ChallengeParticipant[]
+
+  @@map("health_challenges")
+}
+
+model ChallengeParticipant {
+  id           String   @id @default(uuid())
+  challenge_id String
+  user_id      String
+  progress     Int      @default(0)
+  joined_at    DateTime @default(now())
+  updated_at   DateTime @updatedAt
+
+  challenge HealthChallenge @relation(fields: [challenge_id], references: [id], onDelete: Cascade)
+  user      User            @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@unique([challenge_id, user_id])
+  @@index([user_id])
+  @@map("challenge_participants")
+}
+
+model HealthBuddy {
+  id                 String    @id @default(uuid())
+  user_id            String
+  buddy_user_id      String
+  relation           String    @default("friend")
+  last_encouragement String?
+  encouraged_at      DateTime?
+  created_at         DateTime  @default(now())
+
+  user  User @relation("BuddyOwner", fields: [user_id], references: [id], onDelete: Cascade)
+  buddy User @relation("BuddyFriend", fields: [buddy_user_id], references: [id], onDelete: Cascade)
+
+  @@unique([user_id, buddy_user_id])
+  @@map("health_buddies")
+}
+
+model CommunityProfile {
+  user_id            String @id
+  xp                 Int    @default(0)
+  coins              Int    @default(0)
+  health_level       Int    @default(1)
+  contribution_score Int    @default(0)
+  followers          Int    @default(0)
+  following          Int    @default(0)
+
+  user User @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@map("community_profiles")
+}
+
+// ─── Family Health Vault ───────────────────────────────────────────────────
+
+model FamilyHealthVault {
+  id                 String   @id @default(uuid())
+  admin_user_id      String
+  name               String?
+  home_address       String?
+  emergency_contact  String?
+  preferred_hospital String?
+  preferred_pharmacy String?
+  preferred_lab      String?
+  notification_prefs Json?
+  created_at         DateTime @default(now())
+  updated_at         DateTime @updatedAt
+
+  admin   User                @relation(fields: [admin_user_id], references: [id], onDelete: Cascade)
+  members VaultFamilyMember[]
+
+  @@index([admin_user_id])
+  @@map("family_health_vaults")
+}
+
+model VaultFamilyMember {
+  id                String    @id @default(uuid())
+  vault_id          String
+  full_name         String
+  relationship      String
+  gender            String?
+  date_of_birth     DateTime?
+  blood_group       String?
+  height_cm         Float?
+  weight_kg         Float?
+  phone             String?
+  email             String?
+  access_role       String    @default("member")
+  can_view          Boolean   @default(true)
+  can_edit          Boolean   @default(false)
+  medical_profile   Json?
+  emergency_profile Json?
+  health_score      Int?
+  avatar            String?
+  created_at        DateTime  @default(now())
+  updated_at        DateTime  @updatedAt
+
+  vault         FamilyHealthVault   @relation(fields: [vault_id], references: [id], onDelete: Cascade)
+  timeline      VaultTimelineEvent[]
+  medicines     VaultMedicine[]
+  lab_reports   VaultLabReport[]
+  vaccinations  VaultVaccination[]
+  vitals        VaultVital[]
+  doctors       VaultDoctor[]
+  appointments  VaultAppointment[]
+  prescriptions VaultPrescription[]
+
+  @@index([vault_id])
+  @@map("vault_family_members")
+}
+
+model VaultTimelineEvent {
+  id          String   @id @default(uuid())
+  member_id   String
+  event_type  String
+  title       String
+  description String?
+  event_date  DateTime
+  metadata    Json?
+  file_url    String?
+  created_at  DateTime @default(now())
+
+  member VaultFamilyMember @relation(fields: [member_id], references: [id], onDelete: Cascade)
+
+  @@index([member_id, event_date])
+  @@map("vault_timeline_events")
+}
+
+model VaultMedicine {
+  id                 String    @id @default(uuid())
+  member_id          String
+  name               String
+  dose               String?
+  morning            Boolean   @default(false)
+  afternoon          Boolean   @default(false)
+  night              Boolean   @default(false)
+  start_date         DateTime?
+  end_date           DateTime?
+  refills_remaining  Int?
+  prescribing_doctor String?
+  pharmacy           String?
+  instructions       String?
+  purpose            String?
+  adherence_log      Json?
+  created_at         DateTime  @default(now())
+  updated_at         DateTime  @updatedAt
+
+  member VaultFamilyMember @relation(fields: [member_id], references: [id], onDelete: Cascade)
+
+  @@index([member_id])
+  @@map("vault_medicines")
+}
+
+model VaultLabReport {
+  id               String   @id @default(uuid())
+  member_id        String
+  category         String
+  title            String
+  report_date      DateTime
+  file_url         String?
+  lab_name         String?
+  ai_summary       String?
+  extracted_values Json?
+  created_at       DateTime @default(now())
+
+  member VaultFamilyMember @relation(fields: [member_id], references: [id], onDelete: Cascade)
+
+  @@index([member_id])
+  @@map("vault_lab_reports")
+}
+
+model VaultVaccination {
+  id            String    @id @default(uuid())
+  member_id     String
+  vaccine_name  String
+  dose          String?
+  vaccinated_at DateTime
+  hospital      String?
+  next_due      DateTime?
+  created_at    DateTime  @default(now())
+
+  member VaultFamilyMember @relation(fields: [member_id], references: [id], onDelete: Cascade)
+
+  @@index([member_id])
+  @@map("vault_vaccinations")
+}
+
+model VaultVital {
+  id          String   @id @default(uuid())
+  member_id   String
+  vital_type  String
+  value       String
+  unit        String?
+  recorded_at DateTime
+  notes       String?
+  created_at  DateTime @default(now())
+
+  member VaultFamilyMember @relation(fields: [member_id], references: [id], onDelete: Cascade)
+
+  @@index([member_id, vital_type, recorded_at])
+  @@map("vault_vitals")
+}
+
+model VaultDoctor {
+  id               String    @id @default(uuid())
+  member_id        String
+  name             String
+  specialty        String?
+  clinic           String?
+  hospital         String?
+  phone            String?
+  is_primary       Boolean   @default(false)
+  last_visit       DateTime?
+  next_appointment DateTime?
+  notes            String?
+  created_at       DateTime  @default(now())
+  updated_at       DateTime  @updatedAt
+
+  member VaultFamilyMember @relation(fields: [member_id], references: [id], onDelete: Cascade)
+
+  @@index([member_id])
+  @@map("vault_doctors")
+}
+
+model VaultAppointment {
+  id               String    @id @default(uuid())
+  member_id        String
+  doctor_name      String
+  specialty        String?
+  reason           String?
+  diagnosis        String?
+  prescription_url String?
+  follow_up_date   DateTime?
+  payment          String?
+  documents        Json?
+  appointment_date DateTime
+  created_at       DateTime  @default(now())
+
+  member VaultFamilyMember @relation(fields: [member_id], references: [id], onDelete: Cascade)
+
+  @@index([member_id])
+  @@map("vault_appointments")
+}
+
+model VaultPrescription {
+  id          String   @id @default(uuid())
+  member_id   String
+  file_url    String
+  file_type   String?
+  ocr_data    Json?
+  uploaded_at DateTime @default(now())
+
+  member VaultFamilyMember @relation(fields: [member_id], references: [id], onDelete: Cascade)
+
+  @@index([member_id])
+  @@map("vault_prescriptions")
 }

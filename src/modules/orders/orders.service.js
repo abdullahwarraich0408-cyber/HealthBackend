@@ -1,8 +1,9 @@
 const prisma = require('../../config/database');
 const AppError = require('../../utils/AppError');
-const { getIO } = require('../../config/socket');
+const { emitOrderUpdated, emitOrderNew } = require('../../utils/orderTracking.socket');
 const inventoryReservationsService = require('./inventory-reservations.service');
 const vendorNotificationsService = require('../notifications/vendor-notifications.service');
+const customerNotificationsService = require('../notifications/customer-notifications.service');
 const { recordAuditEntry } = require('../vendors/vendor-audit.service');
 
 const createOrdersFromCart = async (customerId, items, deliveryAddress, options = {}) => {
@@ -157,7 +158,12 @@ const createOrdersFromCart = async (customerId, items, deliveryAddress, options 
 
   for (const order of createdOrders) {
     try {
-      getIO().emit(`vendor-${order.vendor_id}:new_order`, { orderId: order.id });
+      emitOrderNew({
+        orderId: order.id,
+        vendorId: order.vendor_id,
+        type: 'medicine',
+        status: order.status,
+      });
     } catch {
       // socket not ready
     }
@@ -231,9 +237,12 @@ const updateOrderStatus = async (orderId, vendorId, status) => {
   });
 
   try {
-    getIO().emit(`customer-${order.customer_id}:order_status`, { 
-      orderId, 
-      status 
+    emitOrderUpdated({
+      orderId,
+      status,
+      type: 'medicine',
+      customerId: order.customer_id,
+      vendorId: order.vendor_id,
     });
   } catch (e) {
     // socket not ready
@@ -249,6 +258,12 @@ const updateOrderStatus = async (orderId, vendorId, status) => {
       customerId: order.customer_id,
       status,
     },
+  });
+
+  await customerNotificationsService.notifyOrderStatusChange(order.customer_id, {
+    orderId,
+    status,
+    orderType: 'medicine',
   });
 
   await recordAuditEntry({

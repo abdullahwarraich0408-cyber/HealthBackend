@@ -2,6 +2,7 @@ const catchAsync = require('../../utils/catchAsync');
 const prisma = require('../../config/database');
 const storageService = require('../../storage/storage.service');
 const prescriptionsService = require('./prescriptions.service');
+const { extractPrescriptionFromFile } = require('../../services/prescription-ocr/prescription-ocr.service');
 const { sendResponse } = require('../../utils/response');
 const AppError = require('../../utils/AppError');
 
@@ -43,8 +44,15 @@ const validatePrescription = catchAsync(async (req, res) => {
   sendResponse(res, 200, { prescription }, 'Prescription status updated successfully');
 });
 
+const readPrescription = catchAsync(async (req, res) => {
+  const { file_url: fileUrl } = req.body;
+  const ocrData = await extractPrescriptionFromFile(fileUrl);
+  sendResponse(res, 200, { ocr_data: ocrData }, 'Prescription read successfully');
+});
+
 module.exports = {
   uploadPrescription,
   getMyPrescriptions,
-  validatePrescription
+  validatePrescription,
+  readPrescription,
 };

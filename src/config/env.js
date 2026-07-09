@@ -31,6 +31,15 @@ const envSchema = z.object({
     .string()
     .optional()
     .transform((v) => v === 'true' || v === '1'),
+  OPENAI_API_KEY: z.string().optional(),
+  OPENAI_MODEL: z.string().default('gpt-4o-mini'),
+  OPENAI_VISION_MODEL: z.string().default('gpt-4o'),
+  OPENAI_OCR_PARSE_MODEL: z.string().default('gpt-4o'),
+  PRESCRIPTION_OCR_TWO_PASS: z.string().default('true'),
+  GOOGLE_VISION_API_KEY: z.string().optional(),
+  PRESCRIPTION_OCR_PROVIDER: z
+    .enum(['auto', 'openai', 'google', 'stub'])
+    .default('auto'),
 });
 
 const _env = envSchema.safeParse(process.env);

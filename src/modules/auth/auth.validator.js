@@ -42,6 +42,7 @@ const appleAuthSchema = firebaseAuthSchema;
 
 const refreshSchema = z.object({
   body: z.object({
+    refreshToken: z.string().optional(),
     deviceId: z.string().optional(),
     platform: z.enum(['web', 'android', 'ios']).optional(),
   }).optional(),

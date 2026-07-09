@@ -1,9 +1,10 @@
 const prisma = require('../../config/database');
 const AppError = require('../../utils/AppError');
-const { getIO } = require('../../config/socket');
+const { emitOrderUpdated, emitOrderNew } = require('../../utils/orderTracking.socket');
 const { pickNextVendor, ACCEPT_TIMEOUT_SEC } = require('./vendor-assignment.service');
 const { scheduleAcceptTimeout, clearAcceptTimeout } = require('./accept-timeout.manager');
 const vendorNotificationsService = require('../notifications/vendor-notifications.service');
+const customerNotificationsService = require('../notifications/customer-notifications.service');
 const { recordAuditEntry } = require('../vendors/vendor-audit.service');
 
 const ORDER_INCLUDE = {
@@ -30,12 +31,34 @@ function parseRejectedIds(value) {
   return [];
 }
 
-function emit(event, payload) {
-  try {
-    getIO().emit(event, payload);
-  } catch {
-    // socket not ready
+function trackPrescriptionOrder(payload) {
+  const {
+    orderId,
+    status,
+    customerId,
+    vendorId,
+    event = 'updated',
+    ...rest
+  } = payload;
+
+  if (event === 'new' && vendorId) {
+    emitOrderNew({
+      orderId,
+      vendorId,
+      type: 'prescription',
+      status,
+      ...rest,
+    });
   }
+
+  emitOrderUpdated({
+    orderId,
+    status,
+    type: 'prescription',
+    customerId,
+    vendorId,
+    ...rest,
+  });
 }
 
 function computeEstimatedValue(items = []) {
@@ -63,7 +86,11 @@ async function assignToNextVendor(orderId) {
       },
       include: ORDER_INCLUDE,
     });
-    emit(`customer-${order.customer_id}:prescription_order`, { orderId, status: 'no_vendor' });
+    trackPrescriptionOrder({
+      orderId,
+      status: 'no_vendor',
+      customerId: order.customer_id,
+    });
     await recordAuditEntry({
       vendorId: null,
       userId: order.customer_id,
@@ -98,16 +125,14 @@ async function assignToNextVendor(orderId) {
     },
   });
 
-  emit(`vendor-${next.vendor.id}:prescription_order`, {
-    orderId,
-    order: updated,
-    acceptDeadline: acceptDeadline.toISOString(),
-    timeoutSeconds: ACCEPT_TIMEOUT_SEC,
-  });
-  emit(`customer-${order.customer_id}:prescription_order`, {
+  trackPrescriptionOrder({
     orderId,
     status: 'awaiting_accept',
-    vendor: updated.current_vendor,
+    customerId: order.customer_id,
+    vendorId: next.vendor.id,
+    event: 'new',
+    acceptDeadline: acceptDeadline.toISOString(),
+    timeoutSeconds: ACCEPT_TIMEOUT_SEC,
   });
 
   await vendorNotificationsService.createVendorNotification({
@@ -207,7 +232,12 @@ async function handleAcceptTimeout(orderId) {
     },
   });
 
-  emit(`vendor-${order.current_vendor_id}:prescription_order_expired`, { orderId });
+  trackPrescriptionOrder({
+    orderId,
+    status: 'expired',
+    vendorId: order.current_vendor_id,
+    event: 'updated',
+  });
   await recordAuditEntry({
     vendorId: order.current_vendor_id,
     userId: null,
@@ -274,7 +304,12 @@ async function vendorRespond(orderId, vendorId, action) {
     include: ORDER_INCLUDE,
   });
 
-  emit(`customer-${order.customer_id}:prescription_order`, { orderId, status: 'accepted' });
+  trackPrescriptionOrder({
+    orderId,
+    status: 'accepted',
+    customerId: order.customer_id,
+    vendorId,
+  });
   await vendorNotificationsService.createVendorNotification({
     vendorId,
     type: 'prescription_accepted',
@@ -374,9 +409,11 @@ async function confirmStock(orderId, vendorId, payload) {
     });
     await assignToNextVendor(orderId);
   } else {
-    emit(`customer-${order.customer_id}:prescription_order`, {
+    trackPrescriptionOrder({
       orderId,
       status: updated.status,
+      customerId: order.customer_id,
+      vendorId,
       stock_status: resolvedStockStatus,
     });
   }
@@ -430,7 +467,19 @@ async function updateDeliveryStatus(orderId, vendorId, status) {
     include: ORDER_INCLUDE,
   });
 
-  emit(`customer-${order.customer_id}:prescription_order`, { orderId, status });
+  trackPrescriptionOrder({
+    orderId,
+    status,
+    customerId: order.customer_id,
+    vendorId,
+  });
+
+  await customerNotificationsService.notifyOrderStatusChange(order.customer_id, {
+    orderId,
+    status,
+    orderType: 'prescription',
+  });
+
   await recordAuditEntry({
     vendorId,
     userId: vendorId,

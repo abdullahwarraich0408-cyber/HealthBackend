@@ -1,5 +1,6 @@
 const prisma = require('../../config/database');
 const AppError = require('../../utils/AppError');
+const { emitOrderUpdated } = require('../../utils/orderTracking.socket');
 const {
   normalizeWeeklySchedule,
   normalizeTimeRange,
@@ -142,6 +143,14 @@ const updateAppointmentStatus = async (doctorId, appointmentId, status, notes) =
       appointment: updated,
     });
 
+    emitOrderUpdated({
+      orderId: updated.id,
+      status: updated.status,
+      type: 'doctor',
+      customerId: updated.customer_id,
+      vendorId: updated.doctor_id,
+    });
+
     return updated;
   }
 
@@ -170,6 +179,14 @@ const updateAppointmentStatus = async (doctorId, appointmentId, status, notes) =
       appointment: updated,
     });
   }
+
+  emitOrderUpdated({
+    orderId: updated.id,
+    status: updated.status,
+    type: 'doctor',
+    customerId: updated.customer_id,
+    vendorId: updated.doctor_id,
+  });
 
   return updated;
 };

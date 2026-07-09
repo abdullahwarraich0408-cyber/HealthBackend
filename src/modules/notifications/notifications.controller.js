@@ -1,6 +1,7 @@
 const catchAsync = require('../../utils/catchAsync');
 const { sendResponse } = require('../../utils/response');
 const vendorNotificationsService = require('./vendor-notifications.service');
+const customerNotificationsService = require('./customer-notifications.service');
 
 const getVendorNotifications = catchAsync(async (req, res) => {
   const notifications = await vendorNotificationsService.listVendorNotifications(req.user.id);
@@ -24,8 +25,20 @@ const testVendorNotification = catchAsync(async (req, res) => {
   sendResponse(res, 201, { notification }, 'Notification created');
 });
 
+const registerDeviceToken = catchAsync(async (req, res) => {
+  const result = await customerNotificationsService.registerDeviceToken(req.user.id, req.body);
+  sendResponse(res, 200, result, 'Device token registered');
+});
+
+const testCustomerPush = catchAsync(async (req, res) => {
+  const result = await customerNotificationsService.sendTestPush(req.user.id);
+  sendResponse(res, 200, result, 'Test push sent');
+});
+
 module.exports = {
   getVendorNotifications,
   markVendorNotificationRead,
   testVendorNotification,
+  registerDeviceToken,
+  testCustomerPush,
 };

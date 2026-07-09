@@ -15,6 +15,14 @@ router.get('/', restrictTo('customer'), prescriptionsController.getMyPrescriptio
 // POST /api/prescriptions/upload - upload prescription image (Customer)
 router.post('/upload', restrictTo('customer'), upload.single('prescriptionFile'), prescriptionsController.uploadPrescription);
 
+// POST /api/prescriptions/read - OCR read from uploaded file URL (Customer)
+router.post(
+  '/read',
+  restrictTo('customer'),
+  validate(prescriptionsValidator.readPrescriptionSchema),
+  prescriptionsController.readPrescription,
+);
+
 // POST /api/prescriptions/:id/validate - admin/vendor validation
 router.post('/:id/validate', restrictTo('admin', 'vendor'), validate(prescriptionsValidator.validatePrescriptionSchema), prescriptionsController.validatePrescription);
 

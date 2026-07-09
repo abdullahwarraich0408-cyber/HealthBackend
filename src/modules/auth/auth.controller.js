@@ -80,7 +80,7 @@ const devLogin = catchAsync(async (req, res) => {
 });
 
 const refresh = catchAsync(async (req, res) => {
-  const refreshToken = req.cookies.refreshToken;
+  const refreshToken = req.cookies.refreshToken || req.body?.refreshToken;
 
   if (!refreshToken) {
     return res.status(401).json({ status: 'fail', message: 'No refresh token provided' });
@@ -99,7 +99,7 @@ const refresh = catchAsync(async (req, res) => {
 });
 
 const logout = catchAsync(async (req, res) => {
-  const refreshToken = req.cookies.refreshToken;
+  const refreshToken = req.cookies.refreshToken || req.body?.refreshToken;
   
   if (req.user && refreshToken) {
     await authSessionService.logoutSession(req.user.id, refreshToken);

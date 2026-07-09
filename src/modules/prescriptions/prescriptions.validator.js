@@ -16,7 +16,14 @@ const validatePrescriptionSchema = z.object({
   })
 });
 
+const readPrescriptionSchema = z.object({
+  body: z.object({
+    file_url: z.string().url('A valid prescription file URL is required'),
+  }),
+});
+
 module.exports = {
   uploadSchema,
-  validatePrescriptionSchema
+  validatePrescriptionSchema,
+  readPrescriptionSchema,
 };
