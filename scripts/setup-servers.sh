@@ -2,7 +2,7 @@
 set -euo pipefail
 
 # ─────────────────────────────────────────────────────────
-# PharmaHub — First-Time Server Setup
+# Medzoos — First-Time Server Setup
 # Run this ONCE from your local machine after terraform apply
 #
 # Usage:
@@ -21,8 +21,8 @@ DB_HOST="${DB_HOST:-165.22.63.182}"
 DB_PRIVATE_IP="${DB_PRIVATE_IP:-10.10.10.2}"
 SSH_USER="root"
 
-DB_NAME="pharmahub"
-DB_USER="pharmahub"
+DB_NAME="medzoos"
+DB_USER="medzoos"
 DB_PASS="${DB_PASS:-$(openssl rand -base64 24)}"
 
 MEILI_KEY="${MEILI_KEY:-$(openssl rand -base64 32)}"
@@ -30,7 +30,7 @@ MEILI_KEY="${MEILI_KEY:-$(openssl rand -base64 32)}"
 REPO_URL="${REPO_URL:-https://github.com/YOUR_USER/YOUR_REPO.git}"
 
 echo "═══════════════════════════════════════════════════"
-echo "  PharmaHub Server Setup"
+echo "  Medzoos Server Setup"
 echo "═══════════════════════════════════════════════════"
 echo ""
 echo "  App Server:  ${APP_HOST}"
@@ -94,13 +94,13 @@ SQL
 mkdir -p /opt/backups/daily
 chown postgres:postgres /opt/backups/daily
 
-cat > /etc/cron.d/pharmahub-backup <<'CRON'
-0 3 * * * postgres pg_dump -U ${DB_USER} -Fc ${DB_NAME} > /opt/backups/daily/pharmahub_\$(date +\%Y\%m\%d).dump && find /opt/backups/daily -name "*.dump" -mtime +7 -delete
+cat > /etc/cron.d/medzoos-backup <<'CRON'
+0 3 * * * postgres pg_dump -U ${DB_USER} -Fc ${DB_NAME} > /opt/backups/daily/medzoos_\$(date +\%Y\%m\%d).dump && find /opt/backups/daily -name "*.dump" -mtime +7 -delete
 CRON
-chmod 644 /etc/cron.d/pharmahub-backup
+chmod 644 /etc/cron.d/medzoos-backup
 
 # ── File storage directories ─────────────────
-mkdir -p /opt/pharmahub-uploads/{prescriptions,products,reports}
+mkdir -p /opt/medzoos-uploads/{prescriptions,products,reports}
 
 # ── Swap ─────────────────────────────────────
 if [ ! -f /swapfile ]; then
@@ -184,13 +184,13 @@ systemctl restart caddy
 mkdir -p /var/log/pm2
 
 # ── Clone repo ───────────────────────────────
-if [ ! -d /opt/pharmahub-backend/.git ]; then
+if [ ! -d /opt/medzoos-backend/.git ]; then
   echo ">>> Cloning repository..."
-  git clone ${REPO_URL} /opt/pharmahub-backend || echo "⚠️  Clone failed — set REPO_URL or clone manually"
+  git clone ${REPO_URL} /opt/medzoos-backend || echo "⚠️  Clone failed — set REPO_URL or clone manually"
 fi
 
 # ── Create .env ──────────────────────────────
-cat > /opt/pharmahub-backend/.env <<ENV
+cat > /opt/medzoos-backend/.env <<ENV
 PORT=5000
 NODE_ENV=production
 
@@ -238,7 +238,7 @@ echo ""
 
 ssh ${SSH_USER}@${APP_HOST} bash <<STARTEOF
 set -e
-cd /opt/pharmahub-backend
+cd /opt/medzoos-backend
 
 if [ -f package.json ]; then
   npm ci --production
@@ -247,10 +247,10 @@ if [ -f package.json ]; then
   pm2 start ecosystem.config.js --env production
   pm2 save
   echo ""
-  echo ">>> ✅ PharmaHub is LIVE at http://${APP_HOST}"
+  echo ">>> ✅ Medzoos is LIVE at http://${APP_HOST}"
 else
-  echo "⚠️  No package.json found. Clone your repo to /opt/pharmahub-backend first."
-  echo "    Then run: cd /opt/pharmahub-backend && npm ci && npx prisma migrate deploy && pm2 start ecosystem.config.js --env production"
+  echo "⚠️  No package.json found. Clone your repo to /opt/medzoos-backend first."
+  echo "    Then run: cd /opt/medzoos-backend && npm ci && npx prisma migrate deploy && pm2 start ecosystem.config.js --env production"
 fi
 STARTEOF
 
@@ -263,8 +263,8 @@ echo "  🌐 App:      http://${APP_HOST}"
 echo "  🔑 SSH App:  ssh root@${APP_HOST}"
 echo "  🔑 SSH DB:   ssh root@${DB_HOST}"
 echo ""
-echo "  📂 App dir:  /opt/pharmahub-backend"
-echo "  📂 Uploads:  /opt/pharmahub-uploads (on DB server)"
+echo "  📂 App dir:  /opt/medzoos-backend"
+echo "  📂 Uploads:  /opt/medzoos-uploads (on DB server)"
 echo "  📂 Backups:  /opt/backups/daily (on DB server)"
 echo ""
 echo "  🔗 DB URL:   postgresql://${DB_USER}:${DB_PASS}@${DB_PRIVATE_IP}:5432/${DB_NAME}"

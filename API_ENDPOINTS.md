@@ -1,6 +1,6 @@
-# PharmaHub API Endpoints
+# Medzoos API Endpoints
 
-This document outlines all available REST API endpoints for the PharmaHub backend. The base URL for all routes is `/api`.
+This document outlines all available REST API endpoints for the Medzoos backend. The base URL for all routes is `/api`.
 
 ---
 

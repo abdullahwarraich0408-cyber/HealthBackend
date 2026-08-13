@@ -9,7 +9,7 @@ function normalizePhone(phone) {
 }
 
 function buildPlaceholderEmail(firebaseUid) {
-  return `${firebaseUid}@firebase.pharmahub.local`;
+  return `${firebaseUid}@firebase.medzoos.local`;
 }
 
 function extractFirebaseProfile(decoded) {

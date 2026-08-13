@@ -359,27 +359,27 @@ async function main() {
     });
 
   const admin = await prisma.user.upsert({
-    where: { email: 'admin@pharmahub.com' },
+    where: { email: 'admin@medzoos.com' },
     update: {},
     create: {
-      email: 'admin@pharmahub.com',
+      email: 'admin@medzoos.com',
       password: hashedPassword,
       name: 'Super Admin',
       role: 'admin',
     },
   });
 
-  const adminAccount = await upsertAccount('admin@pharmahub.com', 'admin');
+  const adminAccount = await upsertAccount('admin@medzoos.com', 'admin');
   await prisma.user.update({
     where: { id: admin.id },
     data: { account_id: adminAccount.id },
   });
 
   const customer = await prisma.user.upsert({
-    where: { email: 'customer@pharmahub.com' },
+    where: { email: 'customer@medzoos.com' },
     update: {},
     create: {
-      email: 'customer@pharmahub.com',
+      email: 'customer@medzoos.com',
       password: hashedPassword,
       name: 'John Doe',
       role: 'customer',
@@ -387,14 +387,14 @@ async function main() {
     },
   });
 
-  const customerAccount = await upsertAccount('customer@pharmahub.com', 'customer');
+  const customerAccount = await upsertAccount('customer@medzoos.com', 'customer');
   await prisma.user.update({
     where: { id: customer.id },
     data: { account_id: customerAccount.id },
   });
 
   const vendor = await prisma.vendor.upsert({
-    where: { email: 'vendor@pharmahub.com' },
+    where: { email: 'vendor@medzoos.com' },
     update: {
       address: 'DHA Phase 5, Lahore',
       city: 'Lahore',
@@ -405,7 +405,7 @@ async function main() {
       average_rating: 4.8,
     },
     create: {
-      email: 'vendor@pharmahub.com',
+      email: 'vendor@medzoos.com',
       password: hashedPassword,
       business_name: 'City Pharmacy',
       license_number: 'LIC-12345',
@@ -421,14 +421,14 @@ async function main() {
     },
   });
 
-  const vendorAccount = await upsertAccount('vendor@pharmahub.com', 'vendor');
+  const vendorAccount = await upsertAccount('vendor@medzoos.com', 'vendor');
   await prisma.vendor.update({
     where: { id: vendor.id },
     data: { account_id: vendorAccount.id },
   });
 
   const vendor2 = await prisma.vendor.upsert({
-    where: { email: 'vendor2@pharmahub.com' },
+    where: { email: 'vendor2@medzoos.com' },
     update: {
       address: 'Gulberg III, Lahore',
       city: 'Lahore',
@@ -439,7 +439,7 @@ async function main() {
       average_rating: 4.6,
     },
     create: {
-      email: 'vendor2@pharmahub.com',
+      email: 'vendor2@medzoos.com',
       password: hashedPassword,
       business_name: 'MedCo Pharma',
       license_number: 'LIC-67890',
@@ -455,7 +455,7 @@ async function main() {
     },
   });
 
-  const vendor2Account = await upsertAccount('vendor2@pharmahub.com', 'vendor');
+  const vendor2Account = await upsertAccount('vendor2@medzoos.com', 'vendor');
   await prisma.vendor.update({
     where: { id: vendor2.id },
     data: { account_id: vendor2Account.id },
@@ -500,13 +500,13 @@ async function main() {
     data: {
       ...portalDoctorData,
       ...portalHospital,
-      email: 'doctor@pharmahub.com',
+      email: 'doctor@medzoos.com',
       password: hashedPassword,
       phone: '+92 300 1234567',
     },
   });
 
-  const doctorAccount = await upsertAccount('doctor@pharmahub.com', 'doctor');
+  const doctorAccount = await upsertAccount('doctor@medzoos.com', 'doctor');
   await prisma.doctor.update({
     where: { id: portalDoctor.id },
     data: { account_id: doctorAccount.id },
@@ -580,7 +580,7 @@ async function main() {
 
   const chughtaiLab = await prisma.labPartner.create({
     data: {
-      email: 'lab@pharmahub.com',
+      email: 'lab@medzoos.com',
       password: hashedPassword,
       name: 'Chughtai Lab',
       license_number: 'PMDC-LAB-2024-0892',
@@ -595,7 +595,7 @@ async function main() {
     },
   });
 
-  const labAccount = await upsertAccount('lab@pharmahub.com', 'lab');
+  const labAccount = await upsertAccount('lab@medzoos.com', 'lab');
   await prisma.labPartner.update({
     where: { id: chughtaiLab.id },
     data: { account_id: labAccount.id },
@@ -683,8 +683,8 @@ async function main() {
     customer: customer.email,
     vendor: vendor.email,
     vendor2: vendor2.email,
-    doctorPortal: 'doctor@pharmahub.com',
-    labPortal: 'lab@pharmahub.com',
+    doctorPortal: 'doctor@medzoos.com',
+    labPortal: 'lab@medzoos.com',
     password: 'password123',
     doctors: DOCTORS.length,
     hospitals: HOSPITALS.length,

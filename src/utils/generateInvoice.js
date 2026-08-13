@@ -6,7 +6,7 @@ const generateInvoice = (order, res) => {
   // Pipe its output to the response
   doc.pipe(res);
 
-  doc.fontSize(25).text('PharmaHub Invoice', { align: 'center' });
+  doc.fontSize(25).text('Medzoos Invoice', { align: 'center' });
   doc.moveDown();
 
   doc.fontSize(14).text(`Order ID: ${order.id}`);

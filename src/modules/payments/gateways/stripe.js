@@ -50,7 +50,7 @@ const createCheckoutSession = async (amount, orderIds, returnBaseUrl) => {
           price_data: {
             currency,
             product_data: {
-              name: 'PharmaHub Order',
+              name: 'Medzoos Order',
               description: `Order payment for ${orderIds.length} item(s)`,
             },
             unit_amount: unitAmount,

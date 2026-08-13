@@ -1,7 +1,7 @@
-# PharmaHub — Backend File Structure
+# Medzoos — Backend File Structure
 
 ```
-pharmahub-backend/
+medzoos-backend/
 │
 ├── src/
 │   │

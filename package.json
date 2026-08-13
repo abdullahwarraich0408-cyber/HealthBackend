@@ -1,7 +1,7 @@
 {
-  "name": "pharmahub-backend",
+  "name": "medzoos-backend",
   "version": "1.0.0",
-  "description": "PharmaHub Backend",
+  "description": "Medzoos Backend",
   "main": "src/server.js",
   "scripts": {
     "start": "node src/server.js",

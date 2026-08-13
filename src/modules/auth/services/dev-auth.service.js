@@ -18,14 +18,29 @@ function normalizePhone(phone) {
 
 function findDevTestAccount(phone, code) {
   const normalized = normalizePhone(phone);
-  return DEV_TEST_ACCOUNTS.find(
-    (entry) => normalizePhone(entry.phone) === normalized && entry.code === code,
+  const trimmedCode = String(code || '').trim();
+
+  const exact = DEV_TEST_ACCOUNTS.find(
+    (entry) => normalizePhone(entry.phone) === normalized && entry.code === trimmedCode,
   );
+  if (exact) return exact;
+
+  // Local backend only: any valid E.164 phone + 123456 (mobile/web without Firebase SMS)
+  if (
+    env.NODE_ENV === 'development' &&
+    trimmedCode === '123456' &&
+    normalized.startsWith('+') &&
+    normalized.length >= 11
+  ) {
+    return { phone: normalized, code: '123456' };
+  }
+
+  return undefined;
 }
 
 async function findOrCreateDevUser(phone) {
   const normalized = normalizePhone(phone);
-  const accountEmail = `${normalized.replace(/\+/g, '')}@dev.pharmahub.local`;
+  const accountEmail = `${normalized.replace(/\+/g, '')}@dev.medzoos.local`;
 
   try {
     let user = await prisma.user.findUnique({

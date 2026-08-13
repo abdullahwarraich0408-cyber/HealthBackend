@@ -1,2 +1,2 @@
-# PharmaHub Backend
-This is the main API for PharmaHub.
+# Medzoos Backend
+This is the main API for Medzoos.

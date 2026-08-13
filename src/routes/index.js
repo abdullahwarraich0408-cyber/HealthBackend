@@ -83,7 +83,7 @@ router.use('/family-vault', familyVaultRoutes);
 router.get('/health', (req, res) => {
   res.status(200).json({
     status: 'success',
-    message: 'PharmaHub API is running',
+    message: 'Medzoos API is running',
     timestamp: new Date().toISOString(),
     uptime: process.uptime()
   });

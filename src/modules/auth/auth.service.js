@@ -175,7 +175,7 @@ const forgotPassword = async (email) => {
   await redisClient.set(`pwdReset:${hashedToken}`, user.id, 'EX', 15 * 60);
 
   // In a real app, send an email. For now, we simulate it.
-  const resetUrl = `https://pharmahub.com/reset-password/${resetToken}`;
+  const resetUrl = `https://medzoos.com/reset-password/${resetToken}`;
   console.log(`Password reset link for ${email}: ${resetUrl}`);
 };
 

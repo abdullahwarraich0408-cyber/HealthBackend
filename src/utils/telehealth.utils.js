@@ -300,7 +300,7 @@ const buildVideoRoomPayload = (appointmentId, meetingId) => {
     room_id: roomId,
     join_url: `${baseUrl.replace(/\/$/, '')}/consultation/${roomId}?appointment=${appointmentId}`,
     provider: 'jitsi',
-    jitsi_room: `PharmaHub_${roomId}`,
+    jitsi_room: `Medzoos_${roomId}`,
   };
 };
 

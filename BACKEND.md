@@ -1,4 +1,4 @@
-# PharmaHub — Backend Architecture
+# Medzoos — Backend Architecture
 
 ## Stack Overview
 

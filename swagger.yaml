@@ -1,8 +1,8 @@
 openapi: 3.0.0
 info:
-  title: PharmaHub API
+  title: Medzoos API
   version: 1.0.0
-  description: API Documentation for PharmaHub Multi-Vendor Backend
+  description: API Documentation for Medzoos Multi-Vendor Backend
 servers:
   - url: http://localhost:5000/api
 paths:
