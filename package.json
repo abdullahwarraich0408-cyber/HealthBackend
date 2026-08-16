@@ -8,6 +8,8 @@
     "dev": "nodemon src/server.js",
     "dev:free-port": "powershell -NoProfile -Command \"$p = Get-NetTCPConnection -LocalPort 5000 -State Listen -ErrorAction SilentlyContinue | Select-Object -ExpandProperty OwningProcess -Unique; if ($p) { $p | ForEach-Object { Stop-Process -Id $_ -Force -ErrorAction SilentlyContinue }; Write-Host 'Freed port 5000' } else { Write-Host 'Port 5000 is free' }\"",
     "test": "jest",
+    "check:platforms": "node scripts/check-platforms.js",
+    "check:functionality": "node scripts/check-functionality.js",
     "lint": "eslint .",
     "format": "prettier --write .",
     "db:migrate": "prisma migrate dev",

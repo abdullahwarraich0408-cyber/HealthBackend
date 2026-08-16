@@ -58,6 +58,11 @@ model User {
   doctor_appointments DoctorAppointment[]
   doctor_reviews      DoctorReview[]
   lab_test_bookings   LabTestBooking[]
+  doctor_relationships DoctorPatientRelationship[]
+  consultations        Consultation[]
+  doctor_prescriptions DoctorPrescription[]
+  medical_documents    MedicalDocument[]
+  record_shares        RecordShare[]
   inventory_reservations InventoryReservation[]
 
   community_posts          CommunityPost[]
@@ -711,6 +716,10 @@ model Doctor {
   reviews          DoctorReview[]
   appointments     DoctorAppointment[]
   practice_locations DoctorPracticeLocation[]
+  patient_relationships DoctorPatientRelationship[]
+  consultations    Consultation[]
+  prescriptions    DoctorPrescription[]
+  lab_orders       LabTestBooking[]
 
   @@map("doctors")
 }
@@ -782,6 +791,7 @@ model DoctorAppointment {
   id                 String   @id @default(uuid())
   doctor_id          String
   customer_id        String
+  relationship_id    String?
   slot               String
   appointment_date   DateTime
   fee                Float
@@ -801,10 +811,15 @@ model DoctorAppointment {
 
   doctor             Doctor              @relation(fields: [doctor_id], references: [id])
   customer           User                @relation(fields: [customer_id], references: [id])
+  relationship       DoctorPatientRelationship? @relation(fields: [relationship_id], references: [id])
   prescription       DoctorPrescription?
   review             DoctorReview?
   chat               AppointmentChat?
+  consultation       Consultation?
+  record_share       RecordShare?
+  lab_orders         LabTestBooking[]
 
+  @@index([relationship_id])
   @@map("doctor_appointments")
 }
 
@@ -844,14 +859,22 @@ model AppointmentMessage {
 model DoctorPrescription {
   id             String   @id @default(uuid())
   appointment_id String   @unique
+  consultation_id String?
   doctor_id      String
   customer_id    String
   items          Json
   notes          String?
+  status         String   @default("signed")
+  source         String   @default("doctor_issued")
+  signed_at      DateTime?
   created_at     DateTime @default(now())
 
   appointment    DoctorAppointment @relation(fields: [appointment_id], references: [id], onDelete: Cascade)
+  consultation   Consultation?     @relation(fields: [consultation_id], references: [id])
+  doctor         Doctor            @relation(fields: [doctor_id], references: [id])
+  customer       User              @relation(fields: [customer_id], references: [id])
 
+  @@index([doctor_id, customer_id])
   @@map("doctor_prescriptions")
 }
 
@@ -887,6 +910,10 @@ model LabTestBooking {
   lab_test_id          String
   lab_partner_id       String?
   customer_id          String
+  doctor_id            String?
+  appointment_id       String?
+  consultation_id      String?
+  ordered_by_doctor    Boolean   @default(false)
   patient_name         String?
   patient_gender       String?
   patient_age          Int?
@@ -911,7 +938,12 @@ model LabTestBooking {
   lab_test             LabTest     @relation(fields: [lab_test_id], references: [id])
   lab_partner          LabPartner? @relation(fields: [lab_partner_id], references: [id])
   customer             User        @relation(fields: [customer_id], references: [id])
+  doctor               Doctor?     @relation(fields: [doctor_id], references: [id])
+  appointment          DoctorAppointment? @relation(fields: [appointment_id], references: [id])
+  consultation         Consultation? @relation(fields: [consultation_id], references: [id])
 
+  @@index([doctor_id])
+  @@index([appointment_id])
   @@map("lab_test_bookings")
 }
 
@@ -1274,4 +1306,150 @@ model VaultPrescription {
 
   @@index([member_id])
   @@map("vault_prescriptions")
+}
+
+// ─── Clinical care layer ───────────────────────────────────────────────────
+// Patient owns the complete record. A doctor only sees their relationship
+// plus records the patient explicitly shared.
+
+model DoctorPatientRelationship {
+  id                  String    @id @default(uuid())
+  doctor_id           String
+  patient_id          String
+  first_consultation  DateTime?
+  last_consultation   DateTime?
+  status              String    @default("active")
+  total_consultations Int       @default(0)
+  created_at          DateTime  @default(now())
+  updated_at          DateTime  @updatedAt
+
+  doctor         Doctor              @relation(fields: [doctor_id], references: [id], onDelete: Cascade)
+  patient        User                @relation(fields: [patient_id], references: [id], onDelete: Cascade)
+  appointments   DoctorAppointment[]
+  consultations  Consultation[]
+
+  @@unique([doctor_id, patient_id])
+  @@index([patient_id])
+  @@map("doctor_patient_relationships")
+}
+
+model Consultation {
+  id              String    @id @default(uuid())
+  appointment_id  String    @unique
+  relationship_id String
+  doctor_id       String
+  patient_id      String
+  status          String    @default("scheduled")
+  symptoms        String?
+  diagnosis       String?
+  clinical_notes  String?
+  follow_up_date  DateTime?
+  follow_up_notes String?
+  started_at      DateTime?
+  completed_at    DateTime?
+  created_at      DateTime  @default(now())
+  updated_at      DateTime  @updatedAt
+
+  appointment   DoctorAppointment         @relation(fields: [appointment_id], references: [id], onDelete: Cascade)
+  relationship  DoctorPatientRelationship @relation(fields: [relationship_id], references: [id], onDelete: Cascade)
+  doctor        Doctor                    @relation(fields: [doctor_id], references: [id])
+  patient       User                      @relation(fields: [patient_id], references: [id])
+  prescriptions DoctorPrescription[]
+  lab_orders    LabTestBooking[]
+
+  @@index([doctor_id, patient_id])
+  @@index([relationship_id])
+  @@map("consultations")
+}
+
+model RecordShare {
+  id                  String   @id @default(uuid())
+  appointment_id      String   @unique
+  patient_id          String
+  doctor_id           String
+  share_prescriptions Boolean  @default(true)
+  share_lab_reports   Boolean  @default(true)
+  share_medicines     Boolean  @default(true)
+  share_documents     Boolean  @default(false)
+  created_at          DateTime @default(now())
+  updated_at          DateTime @updatedAt
+
+  appointment DoctorAppointment @relation(fields: [appointment_id], references: [id], onDelete: Cascade)
+  patient     User              @relation(fields: [patient_id], references: [id], onDelete: Cascade)
+
+  @@index([doctor_id, patient_id])
+  @@map("record_shares")
+}
+
+model MedicalDocument {
+  id             String    @id @default(uuid())
+  patient_id     String
+  document_type  String
+  source         String    @default("patient_upload")
+  title          String
+  doctor_name    String?
+  hospital_name  String?
+  document_date  DateTime?
+  file_url       String?
+  notes          String?
+  created_at     DateTime  @default(now())
+  updated_at     DateTime  @updatedAt
+
+  patient User @relation(fields: [patient_id], references: [id], onDelete: Cascade)
+
+  @@index([patient_id, document_type])
+  @@map("medical_documents")
+}
+
+model HomeSlide {
+  id          String   @id @default(uuid())
+  audience    String
+  slot        Int
+  title       String
+  cta         String
+  action      String
+  image_url   String   @default("")
+  bg          String   @default("#17618E")
+  label       String?
+  description String?
+  badge       String?
+  is_active   Boolean  @default(true)
+  created_at  DateTime @default(now())
+  updated_at  DateTime @updatedAt
+
+  @@unique([audience, slot])
+  @@index([audience, is_active])
+  @@map("home_slides")
+}
+
+model ContentItem {
+  id         String   @id @default(uuid())
+  section    String
+  channel    String   @default("both")
+  sort_order Int      @default(0)
+  title      String
+  subtitle   String   @default("")
+  body       String   @default("")
+  cta        String   @default("")
+  action     String   @default("")
+  href       String   @default("")
+  icon       String   @default("")
+  image_url  String   @default("")
+  bg         String   @default("")
+  badge      String   @default("")
+  meta       String   @default("")
+  is_active  Boolean  @default(true)
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  @@index([section, channel, is_active])
+  @@map("content_items")
+}
+
+model SiteSetting {
+  key        String   @id
+  value      String   @default("")
+  updated_at DateTime @updatedAt
+
+  @@map("site_settings")
 }

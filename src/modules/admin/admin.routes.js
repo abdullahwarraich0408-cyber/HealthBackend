@@ -14,6 +14,8 @@ const vendorFinanceService = require('../vendors/vendor-finance.service');
 const { recordAuditEntry } = require('../vendors/vendor-audit.service');
 const productsService = require('../products/products.service');
 const vendorNotificationsService = require('../notifications/vendor-notifications.service');
+const homeSlidesController = require('../home-slides/homeSlides.controller');
+const cmsController = require('../cms/cms.controller');
 
 router.use(protect, restrictTo('admin'));
 
@@ -163,6 +165,15 @@ router.get('/marketing/offers', catchAsync(async (req, res) => {
   });
   res.json({ status: 'success', data: { offers } });
 }));
+
+router.get('/home-slides', homeSlidesController.listAdmin);
+router.patch('/home-slides/:id', homeSlidesController.updateSlide);
+
+router.get('/content', cmsController.listAdmin);
+router.put('/content/settings', cmsController.updateSettings);
+router.post('/content', cmsController.createItem);
+router.patch('/content/:id', cmsController.updateItem);
+router.delete('/content/:id', cmsController.deleteItem);
 
 router.get('/vendors', catchAsync(async (req, res) => {
   const vendors = await prisma.vendor.findMany({

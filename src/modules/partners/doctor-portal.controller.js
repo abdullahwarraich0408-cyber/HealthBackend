@@ -47,6 +47,33 @@ const getPatients = catchAsync(async (req, res) => {
   sendResponse(res, 200, { patients }, 'Patients fetched');
 });
 
+const getPatient = catchAsync(async (req, res) => {
+  const data = await doctorPortalService.getPatient(req.user.id, req.params.patientId);
+  sendResponse(res, 200, data, 'Patient clinical history fetched');
+});
+
+const getConsultation = catchAsync(async (req, res) => {
+  const clinicalService = require('../clinical/clinical.service');
+  const data = await clinicalService.getConsultationByAppointment(req.user.id, req.params.id);
+  sendResponse(res, 200, data, 'Consultation fetched');
+});
+
+const updateConsultation = catchAsync(async (req, res) => {
+  const clinicalService = require('../clinical/clinical.service');
+  const consultation = await clinicalService.updateConsultation(
+    req.user.id,
+    req.params.id,
+    req.body
+  );
+  sendResponse(res, 200, { consultation }, 'Consultation updated');
+});
+
+const orderLabTest = catchAsync(async (req, res) => {
+  const clinicalService = require('../clinical/clinical.service');
+  const booking = await clinicalService.orderLabTest(req.user.id, req.body);
+  sendResponse(res, 201, { booking }, 'Lab test ordered');
+});
+
 const getStats = catchAsync(async (req, res) => {
   const stats = await doctorPortalService.getStats(req.user.id);
   sendResponse(res, 200, { stats }, 'Stats fetched');
@@ -100,6 +127,10 @@ module.exports = {
   getSchedule,
   updateSchedule,
   getPatients,
+  getPatient,
+  getConsultation,
+  updateConsultation,
+  orderLabTest,
   getStats,
   createPrescription,
   getPrescription,

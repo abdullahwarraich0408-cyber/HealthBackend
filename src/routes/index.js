@@ -39,6 +39,9 @@ const notificationsRoutes = require('../modules/notifications/notifications.rout
 const copilotRoutes = require('../modules/copilot/copilot.routes');
 const communityRoutes = require('../modules/community/community.routes');
 const familyVaultRoutes = require('../modules/family-vault/family-vault.routes');
+const clinicalRoutes = require('../modules/clinical/clinical.routes');
+const homeSlidesRoutes = require('../modules/home-slides/homeSlides.routes');
+const cmsRoutes = require('../modules/cms/cms.routes');
 
 router.use('/auth', authRoutes);
 router.use('/users', usersRoutes);
@@ -79,6 +82,9 @@ router.use('/notifications', notificationsRoutes);
 router.use('/v2/copilot', copilotRoutes);
 router.use('/community', communityRoutes);
 router.use('/family-vault', familyVaultRoutes);
+router.use('/health-records', clinicalRoutes);
+router.use('/home-slides', homeSlidesRoutes);
+router.use('/content', cmsRoutes);
 
 router.get('/health', (req, res) => {
   res.status(200).json({

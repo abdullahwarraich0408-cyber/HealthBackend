@@ -4,10 +4,12 @@ const DAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 
 
 const VALID_TRANSITIONS = {
   pending: ['confirmed', 'cancelled'],
-  confirmed: ['in_progress', 'cancelled'],
+  confirmed: ['checked_in', 'in_progress', 'cancelled', 'no_show'],
+  checked_in: ['in_progress', 'cancelled', 'no_show'],
   in_progress: ['completed', 'cancelled'],
   completed: [],
   cancelled: [],
+  no_show: [],
 };
 
 const parseTime = (value) => {
@@ -29,12 +31,21 @@ const formatTime = (minutes) => {
   return `${String(hrs12).padStart(2, '0')}:${String(mins).padStart(2, '0')} ${meridiem}`;
 };
 
+const coerceDaySlots = (value) => {
+  if (Array.isArray(value)) return value.filter(Boolean).map((item) => String(item).trim()).filter(Boolean);
+  if (typeof value === 'string' && value.trim()) return [value.trim()];
+  return [];
+};
+
 const normalizeWeeklySchedule = (slots) => {
   if (Array.isArray(slots) && slots.length && slots[0]?.day) {
-    return slots;
+    return slots.map((entry) => ({
+      day: entry.day,
+      slots: coerceDaySlots(entry.slots),
+    }));
   }
   if (slots && typeof slots === 'object' && Array.isArray(slots.weekly)) {
-    return slots.weekly;
+    return normalizeWeeklySchedule(slots.weekly);
   }
   return DAYS.slice(1, 6).map((day) => ({ day, slots: [] }));
 };

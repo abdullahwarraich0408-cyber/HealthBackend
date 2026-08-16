@@ -1,0 +1,887 @@
+{
+  "generatedAt": "2026-08-16T09:58:02.777Z",
+  "ok": 110,
+  "notOk": 0,
+  "results": [
+    {
+      "group": "Core",
+      "name": "Backend API running",
+      "status": "OK",
+      "ok": true,
+      "affects": "all platforms",
+      "detail": "Medzoos API is running"
+    },
+    {
+      "group": "Catalog",
+      "name": "Doctors list",
+      "status": "OK",
+      "ok": true,
+      "affects": "website, user app",
+      "detail": "9 items"
+    },
+    {
+      "group": "Catalog",
+      "name": "Medicines / products",
+      "status": "OK",
+      "ok": true,
+      "affects": "website, user app",
+      "detail": "21 items"
+    },
+    {
+      "group": "Catalog",
+      "name": "Pharmacies list",
+      "status": "OK",
+      "ok": true,
+      "affects": "website, user app",
+      "detail": "6 items"
+    },
+    {
+      "group": "Catalog",
+      "name": "Hospitals list",
+      "status": "OK",
+      "ok": true,
+      "affects": "website, user app",
+      "detail": "4 items"
+    },
+    {
+      "group": "Catalog",
+      "name": "Labs list",
+      "status": "OK",
+      "ok": true,
+      "affects": "website, user app",
+      "detail": "3 items"
+    },
+    {
+      "group": "Catalog",
+      "name": "Lab tests list",
+      "status": "OK",
+      "ok": true,
+      "affects": "website, user app",
+      "detail": "12 items"
+    },
+    {
+      "group": "Catalog",
+      "name": "Popular lab tests",
+      "status": "OK",
+      "ok": true,
+      "affects": "website, user app",
+      "detail": "5 items"
+    },
+    {
+      "group": "Catalog",
+      "name": "Categories",
+      "status": "OK",
+      "ok": true,
+      "affects": "website, user app",
+      "detail": "4 items"
+    },
+    {
+      "group": "Catalog",
+      "name": "Search medicines",
+      "status": "OK",
+      "ok": true,
+      "affects": "website, user app",
+      "detail": "/search?q=medicine 200"
+    },
+    {
+      "group": "Catalog",
+      "name": "Trending search",
+      "status": "OK",
+      "ok": true,
+      "affects": "website, user app",
+      "detail": "/search/trending 200"
+    },
+    {
+      "group": "Catalog",
+      "name": "Home posters (first visit)",
+      "status": "OK",
+      "ok": true,
+      "affects": "user app, website hero",
+      "detail": "4 items"
+    },
+    {
+      "group": "Catalog",
+      "name": "Home posters (offers)",
+      "status": "OK",
+      "ok": true,
+      "affects": "user app",
+      "detail": "4 items"
+    },
+    {
+      "group": "Catalog",
+      "name": "CMS care shortcuts",
+      "status": "OK",
+      "ok": true,
+      "affects": "user app home",
+      "detail": "4 items"
+    },
+    {
+      "group": "Catalog",
+      "name": "CMS specialties",
+      "status": "OK",
+      "ok": true,
+      "affects": "user app, website",
+      "detail": "7 items"
+    },
+    {
+      "group": "Catalog",
+      "name": "CMS banners",
+      "status": "OK",
+      "ok": true,
+      "affects": "user app, website",
+      "detail": "0 items"
+    },
+    {
+      "group": "Catalog",
+      "name": "Community posts",
+      "status": "OK",
+      "ok": true,
+      "affects": "user app, website",
+      "detail": "/community/posts 200"
+    },
+    {
+      "group": "Catalog",
+      "name": "Health groups",
+      "status": "OK",
+      "ok": true,
+      "affects": "user app, website",
+      "detail": "/community/groups 200"
+    },
+    {
+      "group": "Catalog",
+      "name": "Challenges",
+      "status": "OK",
+      "ok": true,
+      "affects": "user app",
+      "detail": "/community/challenges 200"
+    },
+    {
+      "group": "Catalog",
+      "name": "Doctor profile",
+      "status": "OK",
+      "ok": true,
+      "affects": "website doctor page, user app",
+      "detail": "/doctors/2ec4333b-9473-4b0d-aeed-9c0cb672d2fa 200"
+    },
+    {
+      "group": "Catalog",
+      "name": "Doctor slots",
+      "status": "OK",
+      "ok": true,
+      "affects": "booking on website + app",
+      "detail": "/doctors/2ec4333b-9473-4b0d-aeed-9c0cb672d2fa/slots 200"
+    },
+    {
+      "group": "Catalog",
+      "name": "Doctor practice locations",
+      "status": "OK",
+      "ok": true,
+      "affects": "clinic booking",
+      "detail": "/doctors/2ec4333b-9473-4b0d-aeed-9c0cb672d2fa/practice-locations 200"
+    },
+    {
+      "group": "Catalog",
+      "name": "Doctor reviews",
+      "status": "OK",
+      "ok": true,
+      "affects": "website, user app",
+      "detail": "/doctors/2ec4333b-9473-4b0d-aeed-9c0cb672d2fa/reviews 200"
+    },
+    {
+      "group": "Catalog",
+      "name": "Product detail",
+      "status": "OK",
+      "ok": true,
+      "affects": "website, user app pharmacy",
+      "detail": "/products/4ce51c08-aed2-4b28-be58-09feddee2d5c 200"
+    },
+    {
+      "group": "Catalog",
+      "name": "Hospital profile",
+      "status": "OK",
+      "ok": true,
+      "affects": "website, user app",
+      "detail": "/hospitals/e2e648d9-b215-455d-bdb4-ba484e97f5d1 200"
+    },
+    {
+      "group": "Catalog",
+      "name": "Hospital doctors",
+      "status": "OK",
+      "ok": true,
+      "affects": "website, user app",
+      "detail": "/hospitals/e2e648d9-b215-455d-bdb4-ba484e97f5d1/doctors 200"
+    },
+    {
+      "group": "Catalog",
+      "name": "Lab profile",
+      "status": "OK",
+      "ok": true,
+      "affects": "website, user app",
+      "detail": "/lab-tests/labs/c3ece5b3-358b-427a-9f4b-0d43d8c2def2 200"
+    },
+    {
+      "group": "Catalog",
+      "name": "Lab test detail",
+      "status": "OK",
+      "ok": true,
+      "affects": "website, user app",
+      "detail": "/lab-tests/7c378add-b96f-4077-b610-c2b9baab8098 200"
+    },
+    {
+      "group": "Auth",
+      "name": "Customer login",
+      "status": "OK",
+      "ok": true,
+      "affects": "website, user app",
+      "detail": "customer@pharmahub.com"
+    },
+    {
+      "group": "Auth",
+      "name": "User app OTP login",
+      "status": "OK",
+      "ok": true,
+      "affects": "user app",
+      "detail": "+923361400372"
+    },
+    {
+      "group": "Auth",
+      "name": "Admin login",
+      "status": "OK",
+      "ok": true,
+      "affects": "admin panel",
+      "detail": "admin@pharmahub.com"
+    },
+    {
+      "group": "Auth",
+      "name": "Pharmacy login",
+      "status": "OK",
+      "ok": true,
+      "affects": "pharmacy panel",
+      "detail": "vendor@pharmahub.com"
+    },
+    {
+      "group": "Auth",
+      "name": "Doctor login",
+      "status": "OK",
+      "ok": true,
+      "affects": "doctor panel, doctor app",
+      "detail": "doctor@medzoos.com"
+    },
+    {
+      "group": "Auth",
+      "name": "Lab login",
+      "status": "OK",
+      "ok": true,
+      "affects": "lab panel",
+      "detail": "lab@pharmahub.com"
+    },
+    {
+      "group": "Patient",
+      "name": "Session",
+      "status": "OK",
+      "ok": true,
+      "affects": "website, user app",
+      "detail": "/auth/me 200"
+    },
+    {
+      "group": "Patient",
+      "name": "Profile",
+      "status": "OK",
+      "ok": true,
+      "affects": "website, user app",
+      "detail": "/users/profile 200"
+    },
+    {
+      "group": "Patient",
+      "name": "Cart",
+      "status": "OK",
+      "ok": true,
+      "affects": "website, user app",
+      "detail": "/customer/cart 200"
+    },
+    {
+      "group": "Patient",
+      "name": "Orders",
+      "status": "OK",
+      "ok": true,
+      "affects": "website, user app, pharmacy",
+      "detail": "/orders 200"
+    },
+    {
+      "group": "Patient",
+      "name": "Addresses",
+      "status": "OK",
+      "ok": true,
+      "affects": "checkout",
+      "detail": "/addresses 200"
+    },
+    {
+      "group": "Patient",
+      "name": "Appointments",
+      "status": "OK",
+      "ok": true,
+      "affects": "website, user app, doctor portal",
+      "detail": "2 items"
+    },
+    {
+      "group": "Patient",
+      "name": "Lab bookings",
+      "status": "OK",
+      "ok": true,
+      "affects": "website, user app, lab portal",
+      "detail": "/lab-tests/bookings/me 200"
+    },
+    {
+      "group": "Patient",
+      "name": "Lab reports",
+      "status": "OK",
+      "ok": true,
+      "affects": "website, user app",
+      "detail": "/lab-tests/reports/me 200"
+    },
+    {
+      "group": "Patient",
+      "name": "Prescriptions",
+      "status": "OK",
+      "ok": true,
+      "affects": "website, user app",
+      "detail": "/customer/prescriptions 200"
+    },
+    {
+      "group": "Patient",
+      "name": "Prescription orders",
+      "status": "OK",
+      "ok": true,
+      "affects": "website, user app, pharmacy",
+      "detail": "/prescription-orders 200"
+    },
+    {
+      "group": "Patient",
+      "name": "Coupons",
+      "status": "OK",
+      "ok": true,
+      "affects": "checkout",
+      "detail": "/customer/coupons 200"
+    },
+    {
+      "group": "Patient",
+      "name": "Family vault",
+      "status": "OK",
+      "ok": true,
+      "affects": "user app, website",
+      "detail": "/family-vault 200"
+    },
+    {
+      "group": "Patient",
+      "name": "Health documents",
+      "status": "OK",
+      "ok": true,
+      "affects": "user app",
+      "detail": "/health-records/documents 200"
+    },
+    {
+      "group": "Patient",
+      "name": "Health timeline",
+      "status": "OK",
+      "ok": true,
+      "affects": "user app",
+      "detail": "/health-records/timeline 200"
+    },
+    {
+      "group": "Patient",
+      "name": "App session",
+      "status": "OK",
+      "ok": true,
+      "affects": "user app",
+      "detail": "/auth/me 200"
+    },
+    {
+      "group": "Patient",
+      "name": "App cart",
+      "status": "OK",
+      "ok": true,
+      "affects": "user app",
+      "detail": "/customer/cart 200"
+    },
+    {
+      "group": "Admin",
+      "name": "Dashboard",
+      "status": "OK",
+      "ok": true,
+      "affects": "admin",
+      "detail": "/admin/dashboard 200"
+    },
+    {
+      "group": "Admin",
+      "name": "Doctors",
+      "status": "OK",
+      "ok": true,
+      "affects": "admin; same list as website/app",
+      "detail": "9 items"
+    },
+    {
+      "group": "Admin",
+      "name": "Pharmacies",
+      "status": "OK",
+      "ok": true,
+      "affects": "admin; same pharmacies as website/app",
+      "detail": "6 items"
+    },
+    {
+      "group": "Admin",
+      "name": "Customers",
+      "status": "OK",
+      "ok": true,
+      "affects": "admin",
+      "detail": "/admin/customers 200"
+    },
+    {
+      "group": "Admin",
+      "name": "Orders",
+      "status": "OK",
+      "ok": true,
+      "affects": "admin, pharmacy",
+      "detail": "/admin/orders 200"
+    },
+    {
+      "group": "Admin",
+      "name": "Products",
+      "status": "OK",
+      "ok": true,
+      "affects": "admin catalog",
+      "detail": "/admin/products 200"
+    },
+    {
+      "group": "Admin",
+      "name": "Hospitals",
+      "status": "OK",
+      "ok": true,
+      "affects": "admin, website, app",
+      "detail": "/admin/hospitals 200"
+    },
+    {
+      "group": "Admin",
+      "name": "Labs",
+      "status": "OK",
+      "ok": true,
+      "affects": "admin, website, app",
+      "detail": "/admin/labs 200"
+    },
+    {
+      "group": "Admin",
+      "name": "Lab bookings",
+      "status": "OK",
+      "ok": true,
+      "affects": "admin, lab portal",
+      "detail": "/lab-tests/admin/bookings 200"
+    },
+    {
+      "group": "Admin",
+      "name": "CMS content",
+      "status": "OK",
+      "ok": true,
+      "affects": "app + website CMS",
+      "detail": "/admin/content 200"
+    },
+    {
+      "group": "Admin",
+      "name": "Home posters",
+      "status": "OK",
+      "ok": true,
+      "affects": "user app + website hero",
+      "detail": "8 items"
+    },
+    {
+      "group": "Admin",
+      "name": "Coupons",
+      "status": "OK",
+      "ok": true,
+      "affects": "checkout",
+      "detail": "/admin/marketing/coupons 200"
+    },
+    {
+      "group": "Admin",
+      "name": "Offers",
+      "status": "OK",
+      "ok": true,
+      "affects": "marketing",
+      "detail": "/admin/marketing/offers 200"
+    },
+    {
+      "group": "Admin",
+      "name": "Audit logs",
+      "status": "OK",
+      "ok": true,
+      "affects": "admin security",
+      "detail": "/admin/audit-logs 200"
+    },
+    {
+      "group": "Admin",
+      "name": "Prescription orders",
+      "status": "OK",
+      "ok": true,
+      "affects": "admin, pharmacy",
+      "detail": "/admin/prescription-orders 200"
+    },
+    {
+      "group": "Cross",
+      "name": "Admin doctors = public doctors",
+      "status": "OK",
+      "ok": true,
+      "affects": "admin ↔ website ↔ user app",
+      "detail": "9 shared"
+    },
+    {
+      "group": "Cross",
+      "name": "Admin pharmacies = public pharmacies",
+      "status": "OK",
+      "ok": true,
+      "affects": "admin ↔ website ↔ user app",
+      "detail": "6 shared"
+    },
+    {
+      "group": "Pharmacy",
+      "name": "Profile",
+      "status": "OK",
+      "ok": true,
+      "affects": "pharmacy panel",
+      "detail": "/vendors/profile 200"
+    },
+    {
+      "group": "Pharmacy",
+      "name": "Dashboard",
+      "status": "OK",
+      "ok": true,
+      "affects": "pharmacy panel",
+      "detail": "/vendors/dashboard/stats 200"
+    },
+    {
+      "group": "Pharmacy",
+      "name": "My products",
+      "status": "OK",
+      "ok": true,
+      "affects": "pharmacy panel → patient catalog",
+      "detail": "3 items"
+    },
+    {
+      "group": "Pharmacy",
+      "name": "Vendor orders",
+      "status": "OK",
+      "ok": true,
+      "affects": "pharmacy panel, patient orders",
+      "detail": "/orders/vendor 200"
+    },
+    {
+      "group": "Pharmacy",
+      "name": "Earnings",
+      "status": "OK",
+      "ok": true,
+      "affects": "pharmacy panel",
+      "detail": "/vendors/earnings/summary 200"
+    },
+    {
+      "group": "Pharmacy",
+      "name": "Prescription queue",
+      "status": "OK",
+      "ok": true,
+      "affects": "pharmacy panel, patient prescriptions",
+      "detail": "/prescription-orders/vendor 200"
+    },
+    {
+      "group": "Pharmacy",
+      "name": "Notifications",
+      "status": "OK",
+      "ok": true,
+      "affects": "pharmacy panel",
+      "detail": "/notifications/vendor 200"
+    },
+    {
+      "group": "Cross",
+      "name": "Logged-in pharmacy visible to patients",
+      "status": "OK",
+      "ok": true,
+      "affects": "pharmacy panel → website/app",
+      "detail": "City Pharmacy"
+    },
+    {
+      "group": "Cross",
+      "name": "Vendor products on patient catalog",
+      "status": "OK",
+      "ok": true,
+      "affects": "pharmacy panel → website/app",
+      "detail": "3/3 visible"
+    },
+    {
+      "group": "Doctor",
+      "name": "Profile",
+      "status": "OK",
+      "ok": true,
+      "affects": "doctor panel, doctor app",
+      "detail": "/partners/doctor/profile 200"
+    },
+    {
+      "group": "Doctor",
+      "name": "Appointments",
+      "status": "OK",
+      "ok": true,
+      "affects": "doctor panel ↔ patient bookings",
+      "detail": "1 items"
+    },
+    {
+      "group": "Doctor",
+      "name": "Schedule",
+      "status": "OK",
+      "ok": true,
+      "affects": "doctor panel, booking slots",
+      "detail": "/partners/doctor/schedule 200"
+    },
+    {
+      "group": "Doctor",
+      "name": "Patients",
+      "status": "OK",
+      "ok": true,
+      "affects": "doctor panel (only their patients)",
+      "detail": "/partners/doctor/patients 200"
+    },
+    {
+      "group": "Doctor",
+      "name": "Stats",
+      "status": "OK",
+      "ok": true,
+      "affects": "doctor panel",
+      "detail": "/partners/doctor/stats 200"
+    },
+    {
+      "group": "Doctor",
+      "name": "Practice locations",
+      "status": "OK",
+      "ok": true,
+      "affects": "clinic booking on website/app",
+      "detail": "/partners/doctor/practice-locations 200"
+    },
+    {
+      "group": "Cross",
+      "name": "Logged-in doctor visible to patients",
+      "status": "OK",
+      "ok": true,
+      "affects": "doctor panel → website/app",
+      "detail": "Abdullah warraich"
+    },
+    {
+      "group": "Lab",
+      "name": "Profile",
+      "status": "OK",
+      "ok": true,
+      "affects": "lab panel",
+      "detail": "/partners/lab/profile 200"
+    },
+    {
+      "group": "Lab",
+      "name": "Bookings",
+      "status": "OK",
+      "ok": true,
+      "affects": "lab panel ↔ patient lab bookings",
+      "detail": "/partners/lab/bookings 200"
+    },
+    {
+      "group": "Lab",
+      "name": "My tests",
+      "status": "OK",
+      "ok": true,
+      "affects": "lab panel → patient lab catalog",
+      "detail": "3 items"
+    },
+    {
+      "group": "Lab",
+      "name": "Reports summary",
+      "status": "OK",
+      "ok": true,
+      "affects": "lab panel",
+      "detail": "/partners/lab/reports/summary 200"
+    },
+    {
+      "group": "Cross",
+      "name": "Logged-in lab visible to patients",
+      "status": "OK",
+      "ok": true,
+      "affects": "lab panel → website/app",
+      "detail": "Chughtai Lab"
+    },
+    {
+      "group": "Cross",
+      "name": "Lab tests on patient catalog",
+      "status": "OK",
+      "ok": true,
+      "affects": "lab panel → website/app",
+      "detail": "3/3 visible"
+    },
+    {
+      "group": "CMS",
+      "name": "Admin specialty edit reaches user app",
+      "status": "OK",
+      "ok": true,
+      "affects": "admin → user app specialities",
+      "detail": "Cardiology __fncheck_1786874278923"
+    },
+    {
+      "group": "CMS",
+      "name": "Admin specialty edit reaches website",
+      "status": "OK",
+      "ok": true,
+      "affects": "admin → website specialities",
+      "detail": "Cardiology __fncheck_1786874278923"
+    },
+    {
+      "group": "CMS",
+      "name": "Revert specialty after test",
+      "status": "OK",
+      "ok": true,
+      "affects": "admin CMS",
+      "detail": "Cardiology"
+    },
+    {
+      "group": "CMS",
+      "name": "Admin tagline reaches website/app",
+      "status": "OK",
+      "ok": true,
+      "affects": "admin → website footer, app download banner",
+      "detail": "Care check __fncheck_1786874278923"
+    },
+    {
+      "group": "CMS",
+      "name": "Revert tagline after test",
+      "status": "OK",
+      "ok": true,
+      "affects": "admin site details",
+      "detail": "Care That Fits Your Life."
+    },
+    {
+      "group": "Isolation",
+      "name": "Guest cannot read orders",
+      "status": "OK",
+      "ok": true,
+      "affects": "security",
+      "detail": "HTTP 401"
+    },
+    {
+      "group": "Isolation",
+      "name": "Patient cannot open admin",
+      "status": "OK",
+      "ok": true,
+      "affects": "security",
+      "detail": "HTTP 403"
+    },
+    {
+      "group": "Isolation",
+      "name": "Patient cannot open doctor portal",
+      "status": "OK",
+      "ok": true,
+      "affects": "security",
+      "detail": "HTTP 403"
+    },
+    {
+      "group": "Isolation",
+      "name": "Pharmacy cannot open doctor portal",
+      "status": "OK",
+      "ok": true,
+      "affects": "security",
+      "detail": "HTTP 403"
+    },
+    {
+      "group": "Isolation",
+      "name": "Doctor cannot open lab portal",
+      "status": "OK",
+      "ok": true,
+      "affects": "security",
+      "detail": "HTTP 403"
+    },
+    {
+      "group": "Isolation",
+      "name": "Doctor cannot open admin CMS",
+      "status": "OK",
+      "ok": true,
+      "affects": "security",
+      "detail": "HTTP 403"
+    },
+    {
+      "group": "UI",
+      "name": "Website landing loads CMS headline",
+      "status": "OK",
+      "ok": true,
+      "affects": "website ← admin site details",
+      "detail": "http://localhost:3000/"
+    },
+    {
+      "group": "UI",
+      "name": "Website doctors page",
+      "status": "OK",
+      "ok": true,
+      "affects": "website ← doctors API",
+      "detail": "http://localhost:3000/doctors"
+    },
+    {
+      "group": "UI",
+      "name": "Website lab tests page",
+      "status": "OK",
+      "ok": true,
+      "affects": "website ← lab API",
+      "detail": "http://localhost:3000/lab-tests"
+    },
+    {
+      "group": "UI",
+      "name": "Website pharmacies page",
+      "status": "OK",
+      "ok": true,
+      "affects": "website ← vendors API",
+      "detail": "http://localhost:3000/vendors"
+    },
+    {
+      "group": "UI",
+      "name": "Admin login page",
+      "status": "OK",
+      "ok": true,
+      "affects": "admin panel",
+      "detail": "http://localhost:3001/portal-access"
+    },
+    {
+      "group": "UI",
+      "name": "Admin content hub",
+      "status": "OK",
+      "ok": true,
+      "affects": "admin CMS",
+      "detail": "auth gate working"
+    },
+    {
+      "group": "UI",
+      "name": "Pharmacy panel UI",
+      "status": "OK",
+      "ok": true,
+      "affects": "Pharmacy panel UI",
+      "detail": ":3002 up, API proxied"
+    },
+    {
+      "group": "UI",
+      "name": "Doctor panel UI",
+      "status": "OK",
+      "ok": true,
+      "affects": "Doctor panel UI",
+      "detail": ":3003 up, API proxied"
+    },
+    {
+      "group": "UI",
+      "name": "Lab panel UI",
+      "status": "OK",
+      "ok": true,
+      "affects": "Lab panel UI",
+      "detail": ":3004 up, API proxied"
+    },
+    {
+      "group": "UI",
+      "name": "User app Metro bundler",
+      "status": "OK",
+      "ok": true,
+      "affects": "user app",
+      "detail": "http://localhost:8081"
+    }
+  ]
+}

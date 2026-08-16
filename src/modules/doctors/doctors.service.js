@@ -14,6 +14,7 @@ const {
   assertStatusTransition,
 } = require('../../utils/telehealth.utils');
 const { notifyAppointmentBooked } = require('../../utils/telehealth.notifications');
+const clinicalService = require('../clinical/clinical.service');
 const {
   mapPracticeLocation,
   practiceLocationInclude,
@@ -159,32 +160,10 @@ const getDoctorPracticeLocations = async (doctorId) => {
   return (doctor.practice_locations || []).map(mapPracticeLocation);
 };
 
-const getDoctorSlots = async (doctorId, dateValue, query = {}) => {
-  const doctor = await getDoctorById(doctorId);
-  const targetDate = parseLocalDate(dateValue);
-  const bookedSlots = await getBookedSlotsForDate(doctorId, targetDate);
+const isLegacyPracticeLocationId = (value) =>
+  !value || value === 'legacy' || value === 'null' || value === 'undefined';
 
-  const isInPerson =
-    query.consult === 'in_person' ||
-    query.hospital_id ||
-    query.practice_location_id;
-
-  if (isInPerson) {
-    const location = await resolvePracticeLocation(prisma, doctorId, query);
-    if (!location) {
-      throw new AppError('Practice location not found for this doctor', 404);
-    }
-
-    const availability = getSlotsForLocationOnDate(location, targetDate, bookedSlots);
-    return {
-      ...availability,
-      practice_location_id: location.id,
-      hospital_id: location.hospital_id,
-      location_title: location.hospital?.name || location.clinic_name,
-      fee: location.fee ?? doctor.fee,
-    };
-  }
-
+const getAvailabilityFromDoctorSlots = (doctor, targetDate, bookedSlots) => {
   const weeklySchedule = normalizeWeeklySchedule(doctor.slots);
   const ranges = getScheduleRangesForDate(weeklySchedule, targetDate);
   const { slots, booked } = getSlotAvailabilityForDate(weeklySchedule, targetDate, bookedSlots);
@@ -199,42 +178,104 @@ const getDoctorSlots = async (doctorId, dateValue, query = {}) => {
   };
 };
 
+const getDoctorSlots = async (doctorId, dateValue, query = {}) => {
+  const doctor = await getDoctorById(doctorId);
+  const targetDate = parseLocalDate(dateValue);
+  const bookedSlots = await getBookedSlotsForDate(doctorId, targetDate);
+
+  const isInPerson =
+    query.consult === 'in_person' ||
+    query.hospital_id ||
+    query.practice_location_id;
+
+  if (isInPerson) {
+    // Fake "legacy" id is used by the patient site when the doctor only has a hospital name
+    // and no DoctorPracticeLocation rows. Use the same weekly slots as online booking.
+    if (!isLegacyPracticeLocationId(query.practice_location_id) || query.hospital_id) {
+      const location = await resolvePracticeLocation(prisma, doctorId, {
+        hospital_id: query.hospital_id,
+        practice_location_id: isLegacyPracticeLocationId(query.practice_location_id)
+          ? null
+          : query.practice_location_id,
+      });
+      if (location) {
+        const availability = getSlotsForLocationOnDate(location, targetDate, bookedSlots);
+        return {
+          ...availability,
+          practice_location_id: location.id,
+          hospital_id: location.hospital_id,
+          location_title: location.hospital?.name || location.clinic_name,
+          fee: location.fee ?? doctor.fee,
+        };
+      }
+
+      if (!isLegacyPracticeLocationId(query.practice_location_id)) {
+        throw new AppError('Practice location not found for this doctor', 404);
+      }
+    }
+
+    return {
+      ...getAvailabilityFromDoctorSlots(doctor, targetDate, bookedSlots),
+      practice_location_id: null,
+      hospital_id: doctor.hospital_id || null,
+      location_title: doctor.hospital || null,
+    };
+  }
+
+  return getAvailabilityFromDoctorSlots(doctor, targetDate, bookedSlots);
+};
+
 const bookAppointment = async (customerId, data) => {
   const doctor = await getDoctorById(data.doctor_id);
   const normalizedSlot = normalizeSlotLabel(data.slot);
   const appointmentDateInput = data.appointment_date || new Date();
   const isInPerson = data.preferred_consultation_mode === 'in_person';
 
-  return prisma.$transaction(async (tx) => {
+  const appointment = await prisma.$transaction(async (tx) => {
     const bookedSlots = await getBookedSlotsForDate(doctor.id, appointmentDateInput, tx);
     let fee = doctor.fee;
     let hospitalId = null;
     let practiceLocationId = null;
 
     if (isInPerson) {
-      const location = await resolvePracticeLocation(prisma, doctor.id, {
-        hospital_id: data.hospital_id,
-        practice_location_id: data.practice_location_id,
-      });
-      if (!location) {
+      const location =
+        !isLegacyPracticeLocationId(data.practice_location_id) || data.hospital_id
+          ? await resolvePracticeLocation(prisma, doctor.id, {
+              hospital_id: data.hospital_id,
+              practice_location_id: isLegacyPracticeLocationId(data.practice_location_id)
+                ? null
+                : data.practice_location_id,
+            })
+          : null;
+
+      if (location) {
+        const availability = getSlotsForLocationOnDate(location, appointmentDateInput, bookedSlots);
+        if (!availability.works_this_day) {
+          throw new AppError('Doctor is not available at this hospital on the selected day', 400);
+        }
+
+        const isAvailable = availability.slots.some(
+          (slot) => normalizeSlotLabel(slot) === normalizedSlot
+        );
+        if (!isAvailable) {
+          throw new AppError('Selected slot is not available at this location', 400);
+        }
+
+        fee = location.fee ?? doctor.fee;
+        hospitalId = location.hospital_id;
+        practiceLocationId = location.id;
+      } else if (!isLegacyPracticeLocationId(data.practice_location_id)) {
         throw new AppError('Please select a valid hospital/clinic for this appointment', 400);
+      } else {
+        // Legacy hospital name only — validate against doctor weekly schedule.
+        const weeklySchedule = normalizeWeeklySchedule(doctor.slots);
+        const { slots } = getSlotAvailabilityForDate(weeklySchedule, appointmentDateInput, bookedSlots);
+        const isAvailable = slots.some((slot) => normalizeSlotLabel(slot) === normalizedSlot);
+        if (!isAvailable) {
+          throw new AppError('Selected slot is not available', 400);
+        }
+        hospitalId = doctor.hospital_id || null;
       }
-
-      const availability = getSlotsForLocationOnDate(location, appointmentDateInput, bookedSlots);
-      if (!availability.works_this_day) {
-        throw new AppError('Doctor is not available at this hospital on the selected day', 400);
-      }
-
-      const isAvailable = availability.slots.some(
-        (slot) => normalizeSlotLabel(slot) === normalizedSlot
-      );
-      if (!isAvailable) {
-        throw new AppError('Selected slot is not available at this location', 400);
-      }
-
-      fee = location.fee ?? doctor.fee;
-      hospitalId = location.hospital_id;
-      practiceLocationId = location.id;
     } else {
       const weeklySchedule = normalizeWeeklySchedule(doctor.slots);
       const { slots } = getSlotAvailabilityForDate(weeklySchedule, appointmentDateInput, bookedSlots);
@@ -275,6 +316,14 @@ const bookAppointment = async (customerId, data) => {
 
     return appointment;
   });
+
+  try {
+    await clinicalService.onAppointmentCreated(appointment, data.share_records);
+  } catch (err) {
+    console.error('clinical onAppointmentCreated failed', err.message);
+  }
+
+  return appointment;
 };
 
 const getCustomerAppointments = async (customerId) => {

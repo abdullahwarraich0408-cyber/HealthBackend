@@ -138,11 +138,29 @@ function scoreToLevel(score) {
   return 'low';
 }
 
-function generateActions(intent, riskLevel, message) {
+function buildObservation(message, answers = {}) {
+  const blob = `${message} ${Object.values(answers).join(' ')}`.toLowerCase();
+  return {
+    fever: /\bfever|temperature|pyrexia|chills?\b/i.test(blob),
+    cough: /\bcough|phlegm|sputum\b/i.test(blob),
+    cold: /\bcold|runny nose|sneezing|congestion|flu\b/i.test(blob),
+    headache: /\bheadache|migraine\b/i.test(blob),
+    stomach: /\bstomach|nausea|vomit|diarrhea|diarrhoea|abdomen|gastric\b/i.test(blob),
+    pain: /\bpain|ache|sore|hurt\b/i.test(blob),
+    fatigue: /\btired|fatigue|weak|exhaust|letharg/i.test(blob),
+    chest: /\bchest\b/i.test(blob),
+    breathlessness: /\bbreath|breathless|short of breath|wheez/i.test(blob),
+    durationLong: /more than 3 days|over a week|weeks/i.test(blob) || answers.duration === 'More than 3 days',
+    highTemp: /above 39|39°|high fever/i.test(blob),
+  };
+}
+
+function generateActions(intent, riskLevel, message, answers = {}) {
   const actions = [];
   const add = (type, label, reason, priority, navigation) => {
     actions.push({ id: createId(), type, label, reason, priority, navigation });
   };
+  const obs = buildObservation(message, answers);
 
   if (riskLevel === 'critical') {
     add('emergency_alert', 'Call emergency (1122)', 'Your symptoms may need immediate care.', 100);
@@ -150,11 +168,51 @@ function generateActions(intent, riskLevel, message) {
     return actions;
   }
 
-  if (intent === 'symptoms' && /\bchest\b/i.test(message)) {
-    if (riskLevel === 'high' || riskLevel === 'medium') {
-      add('book_lab', 'Book ECG + Troponin', 'Cardiac testing recommended for chest pain.', 85, { screen: 'LabTestsList' });
+  if (intent === 'symptoms') {
+    if (obs.chest || obs.breathlessness) {
+      if (riskLevel === 'high' || riskLevel === 'medium') {
+        add('book_lab', 'Book ECG + basic cardiac labs', 'Chest or breathing symptoms with risk factors need testing.', 88, { screen: 'LabTestsList' });
+      }
+      add('book_doctor', 'Book Cardiologist', 'Specialist evaluation for chest-related symptoms.', 86, { screen: 'DoctorsList', params: { specialty: 'Cardiology' } });
+      add('health_plan', 'Stop activity & rest upright', 'Avoid exertion and seek care if pain worsens.', 55, { screen: 'HealthHome' });
+    } else if (obs.fever) {
+      add('health_plan', 'Fever rest & hydration plan', 'Rest, sip fluids, and check temperature every 4–6 hours.', 82, { screen: 'HealthHome' });
+      add('order_medicine', 'Browse fever-care medicines', 'Pharmacy options for fever comfort — follow label dosing.', 74, { screen: 'MedicinesList' });
+      if (!obs.highTemp && riskLevel === 'low') {
+        add('health_plan', 'Light recovery movement', 'Skip intense workouts; short walks once fever eases.', 58, { screen: 'HealthHome' });
+      }
+      if (riskLevel === 'medium' || riskLevel === 'high' || obs.durationLong || obs.highTemp) {
+        add('book_doctor', 'Book GP today', 'Persistent or high fever should be reviewed.', 80, { screen: 'DoctorsList', params: { specialty: 'General Physician' } });
+        add('book_lab', 'Book CBC / infection labs', 'Blood tests help clarify prolonged fever.', 70, { screen: 'LabTestsList' });
+      }
+    } else if (obs.cough || obs.cold) {
+      add('health_plan', 'Cough & cold recovery plan', 'Warm fluids, steam, and rest. Avoid smoke.', 80, { screen: 'HealthHome' });
+      add('order_medicine', 'Browse cough & cold care', 'OTC options — confirm with a pharmacist if unsure.', 72, { screen: 'MedicinesList' });
+      add('health_plan', 'Breathing & gentle mobility', 'Slow deep breaths and short walks if comfortable.', 60, { screen: 'HealthHome' });
+      if (riskLevel !== 'low' || obs.durationLong) {
+        add('book_doctor', 'Book GP / chest review', 'Ongoing cough may need clinical assessment.', 76, { screen: 'DoctorsList', params: { specialty: 'General Physician' } });
+      }
+    } else if (obs.headache) {
+      add('health_plan', 'Headache relief routine', 'Rest in a quiet room, hydrate, limit screens.', 80, { screen: 'HealthHome' });
+      add('order_medicine', 'Browse headache relief', 'Pharmacy pain-relief — follow label dosing.', 70, { screen: 'MedicinesList' });
+      add('health_plan', 'Neck stretch & posture reset', 'Gentle stretches can ease tension headaches.', 58, { screen: 'HealthHome' });
+    } else if (obs.stomach) {
+      add('health_plan', 'Stomach-settling care plan', 'ORS/water, bland foods, avoid spicy meals today.', 80, { screen: 'HealthHome' });
+      add('order_medicine', 'Browse digestive care', 'ORS and antacids from partner pharmacies.', 72, { screen: 'MedicinesList' });
+    } else if (obs.fatigue) {
+      add('health_plan', 'Energy & sleep reset plan', 'Consistent sleep, hydration, and daylight walking.', 78, { screen: 'HealthHome' });
+      add('health_plan', 'Low-impact exercise starter', 'Light walking or stretching 3–4 days/week.', 65, { screen: 'HealthHome' });
+      add('book_doctor', 'Discuss with a doctor', 'Persistent fatigue can need labs and a check.', 60, { screen: 'DoctorsList', params: { specialty: 'General Physician' } });
+    } else if (obs.pain) {
+      add('health_plan', 'Pain pacing & rest plan', 'Alternate rest with gentle movement.', 78, { screen: 'HealthHome' });
+      add('order_medicine', 'Browse pain-care options', 'Pharmacy options — use only as directed.', 70, { screen: 'MedicinesList' });
+      add('book_doctor', 'Book a doctor', 'A clinician can assess the cause of your pain.', 75, { screen: 'DoctorsList' });
+    } else {
+      add('health_plan', 'Rest, fluids & monitor plan', 'Rest, hydrate, and note if symptoms worsen overnight.', 76, { screen: 'HealthHome' });
+      add('order_medicine', 'Browse supportive medicines', 'Pharmacy essentials for common symptom care.', 68, { screen: 'MedicinesList' });
+      add('health_plan', 'Gentle recovery exercise', 'Short walks and light stretching once stable.', 58, { screen: 'HealthHome' });
+      add('book_doctor', 'Book a doctor', 'Get a clinical opinion if symptoms continue.', 52, { screen: 'DoctorsList' });
     }
-    add('book_doctor', 'Book Cardiologist', 'Specialist evaluation for chest symptoms.', 80, { screen: 'DoctorsList', params: { specialty: 'Cardiology' } });
   }
 
   if (intent === 'medicine') {
@@ -176,10 +234,17 @@ function generateActions(intent, riskLevel, message) {
 
   if (!actions.length) {
     add('book_doctor', 'Book a doctor', 'A clinician can help with your concern.', 50, { screen: 'DoctorsList' });
+    add('order_medicine', 'Browse medicines', 'Find pharmacy support while you decide next steps.', 45, { screen: 'MedicinesList' });
     add('book_lab', 'Book a lab test', 'Tests clarify many health questions.', 45, { screen: 'LabTestsList' });
   }
 
-  return actions.sort((a, b) => b.priority - a.priority).slice(0, 4);
+  const byLabel = new Map();
+  for (const action of actions) {
+    const existing = byLabel.get(action.label);
+    if (!existing || action.priority > existing.priority) byLabel.set(action.label, action);
+  }
+
+  return [...byLabel.values()].sort((a, b) => b.priority - a.priority).slice(0, 4);
 }
 
 async function createSession(userId) {
@@ -256,6 +321,7 @@ async function sendMessage(userId, sessionId, text) {
 
   const intent = detectIntent(trimmed);
   session.intent = intent;
+  session.triggerMessage = trimmed;
   session.answers = {};
   session.questionIndex = 0;
   session.phase = 'intent';
@@ -296,13 +362,13 @@ async function sendMessage(userId, sessionId, text) {
 }
 
 async function completeAssessment(session, userMsg, messageOverride) {
-  const message = messageOverride || userMsg.text;
+  const message = messageOverride || session.triggerMessage || userMsg.text;
   const assessment = assessRisk(session.intent || 'general', message, session.answers, session.context);
   session.riskLevel = assessment.level;
   session.phase = 'actions';
   session.completed = true;
 
-  const actions = generateActions(session.intent, assessment.level, message);
+  const actions = generateActions(session.intent, assessment.level, message, session.answers);
   const lines = [`Risk level: ${assessment.level}`];
 
   if (assessment.differentials.length) {
@@ -312,9 +378,9 @@ async function completeAssessment(session, userMsg, messageOverride) {
     });
   }
 
-  lines.push('', 'Here is what I recommend next:');
+  lines.push('', 'Based on your observation, here is what I recommend next:');
   assessment.reasoning.forEach((r) => lines.push(`• ${r}`));
-  lines.push('', 'Choose an action below to continue your care journey.');
+  lines.push('', 'Pick a next step below — rest plan, medicines, exercise guidance, labs, or a doctor.');
 
   return buildAssessmentResponse(session, userMsg, assessment, actions, lines.join('\n'));
 }

@@ -39,8 +39,10 @@ const uploadFile = async (fileBuffer, fileName, folder = 'general', mimetype) =>
       fs.writeFileSync(localFilePath, fileBuffer);
       
       const serverPort = env.PORT || 5000;
-      const url = `http://localhost:${serverPort}/uploads/${folder}/${localFileName}`;
-      logger.info(`File uploaded to Local fallback: ${url}`);
+      // Relative path so web/apps can resolve against their API host
+      // (avoids hardcoding localhost which breaks on phones / deployed frontends)
+      const url = `/uploads/${folder}/${localFileName}`;
+      logger.info(`File uploaded to Local fallback: http://localhost:${serverPort}${url}`);
       return url;
     } catch (localError) {
       logger.error(`Local fallback upload failed: ${localError.message}`);

@@ -10,6 +10,14 @@ const bookAppointmentSchema = z.object({
     preferred_consultation_mode: z.enum(['online', 'in_person']).optional(),
     hospital_id: z.string().optional(),
     practice_location_id: z.string().optional(),
+    share_records: z
+      .object({
+        share_prescriptions: z.boolean().optional(),
+        share_lab_reports: z.boolean().optional(),
+        share_medicines: z.boolean().optional(),
+        share_documents: z.boolean().optional(),
+      })
+      .optional(),
   }),
 });
 

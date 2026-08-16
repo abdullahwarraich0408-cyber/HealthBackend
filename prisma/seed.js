@@ -202,7 +202,7 @@ const DOCTORS = [
     online: true,
     available_today: false,
     languages: ['English', 'Urdu', 'Punjabi'],
-    photo_url: 'https://images.unsplash.com/photo-1537368910022-7914809a2a3c?auto=format&fit=crop&q=80&w=400',
+    photo_url: 'https://images.unsplash.com/photo-1612349317150-e413f6a5b16d?auto=format&fit=crop&q=80&w=400',
     slots: ['11:00 AM', '2:00 PM', '4:00 PM'],
     about: 'Consultant psychiatrist specializing in anxiety, depression, and stress-related disorders.',
     qualifications: ['MBBS', 'FCPS — Psychiatry'],
