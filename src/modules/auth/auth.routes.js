@@ -28,7 +28,7 @@ router.get('/me', protect, authController.me);
 router.put('/profile', protect, validate(authValidator.updateProfileSchema), authController.updateProfile);
 router.delete('/account', protect, authController.deleteAccount);
 
-router.post('/forgot-password', authRateLimiter, authController.forgotPassword);
-router.post('/reset-password/:token', authRateLimiter, authController.resetPassword);
+router.post('/forgot-password', authRateLimiter, validate(authValidator.forgotPasswordSchema), authController.forgotPassword);
+router.post('/reset-password/:token', authRateLimiter, validate(authValidator.resetPasswordSchema), authController.resetPassword);
 
 module.exports = router;

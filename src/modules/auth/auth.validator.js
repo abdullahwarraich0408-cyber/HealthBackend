@@ -58,6 +58,21 @@ const updateProfileSchema = z.object({
   }),
 });
 
+const forgotPasswordSchema = z.object({
+  body: z.object({
+    email: z.string().email(),
+  }),
+});
+
+const resetPasswordSchema = z.object({
+  params: z.object({
+    token: z.string().min(16),
+  }),
+  body: z.object({
+    password: z.string().min(8),
+  }),
+});
+
 const devLoginSchema = z.object({
   body: z.object({
     phone: z.string().min(10),
@@ -76,5 +91,7 @@ module.exports = {
   appleAuthSchema,
   refreshSchema,
   updateProfileSchema,
+  forgotPasswordSchema,
+  resetPasswordSchema,
   devLoginSchema,
 };

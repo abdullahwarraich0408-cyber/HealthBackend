@@ -5,7 +5,6 @@ const { hashPassword, comparePassword, generateTokens, generatePartnerTokens } =
 const jwt = require('jsonwebtoken');
 const env = require('../../config/env');
 const crypto = require('crypto');
-const bcrypt = require('bcryptjs');
 const { issueSession } = require('./services/token.service');
 
 const storeRefreshToken = async (userId, refreshToken, value = 'valid') => {
@@ -22,7 +21,10 @@ const storeRefreshToken = async (userId, refreshToken, value = 'valid') => {
 };
 
 const registerUser = async (data, meta, res) => {
-  const existingAccount = await prisma.account.findUnique({ where: { email: data.email } });
+  const email = String(data.email || '').trim().toLowerCase();
+  const existingAccount = await prisma.account.findFirst({
+    where: { email: { equals: email, mode: 'insensitive' } },
+  });
   if (existingAccount) {
     throw new AppError('Email already in use', 400);
   }
@@ -32,13 +34,13 @@ const registerUser = async (data, meta, res) => {
   // Create Unified Account
   const account = await prisma.account.create({
     data: {
-      email: data.email,
+      email,
       password: hashedPassword,
       role: 'customer',
       customer: {
         create: {
           name: data.name,
-          phone: data.phone,
+          phone: data.phone || null,
           addresses: data.addresses,
           role: 'customer'
         }
@@ -51,14 +53,17 @@ const registerUser = async (data, meta, res) => {
 };
 
 const loginUser = async (email, password, meta, res) => {
-  const account = await prisma.account.findUnique({ 
-    where: { email },
+  const normalizedEmail = String(email || '').trim().toLowerCase();
+  const account = await prisma.account.findFirst({
+    where: { email: { equals: normalizedEmail, mode: 'insensitive' } },
     include: { customer: true }
   });
   
   if (!account || (account.role !== 'customer' && account.role !== 'admin')) {
     // Fallback to old user table during transition
-    const legacyUser = await prisma.user.findUnique({ where: { email } });
+    const legacyUser = await prisma.user.findFirst({
+      where: { email: { equals: normalizedEmail, mode: 'insensitive' } },
+    });
     if (!legacyUser) throw new AppError('Invalid email or password', 401);
     
     const isMatch = await comparePassword(password, legacyUser.password);
@@ -72,7 +77,7 @@ const loginUser = async (email, password, meta, res) => {
   }
 
   if (!account.password) {
-    throw new AppError('This account uses phone or social login. Please sign in with OTP or Google.', 400);
+    throw new AppError('This account does not have a password yet. Use Forgot password to create one.', 400);
   }
 
   const isMatch = await comparePassword(password, account.password);
@@ -165,34 +170,84 @@ const logoutUser = async (userId, refreshToken) => {
 };
 
 const forgotPassword = async (email) => {
-  const user = await prisma.user.findUnique({ where: { email } });
-  if (!user) return; // Silent return for security
+  const normalizedEmail = String(email || '').trim().toLowerCase();
+  if (!normalizedEmail) return;
+
+  const account = await prisma.account.findFirst({
+    where: {
+      email: { equals: normalizedEmail, mode: 'insensitive' },
+      role: { in: ['customer', 'admin'] },
+    },
+  });
+
+  let subject = null;
+  if (account) {
+    subject = `account:${account.id}`;
+  } else {
+    const legacyUser = await prisma.user.findFirst({
+      where: { email: { equals: normalizedEmail, mode: 'insensitive' } },
+    });
+    if (!legacyUser) return;
+    subject = `legacy:${legacyUser.id}`;
+  }
 
   const resetToken = crypto.randomBytes(32).toString('hex');
   const hashedToken = crypto.createHash('sha256').update(resetToken).digest('hex');
 
-  // Save hashed token in Redis with 15 mins expiry
-  await redisClient.set(`pwdReset:${hashedToken}`, user.id, 'EX', 15 * 60);
+  try {
+    await redisClient.set(`pwdReset:${hashedToken}`, subject, 'EX', 15 * 60);
+  } catch {
+    throw new AppError('Password reset is temporarily unavailable. Please try again shortly.', 503);
+  }
 
-  // In a real app, send an email. For now, we simulate it.
-  const resetUrl = `https://medzoos.com/reset-password/${resetToken}`;
-  console.log(`Password reset link for ${email}: ${resetUrl}`);
+  const frontendUrl = String(env.FRONTEND_URL || 'http://localhost:3000').replace(/\/$/, '');
+  const resetUrl = `${frontendUrl}/reset-password/${resetToken}`;
+  console.log(`Password reset link for ${normalizedEmail}: ${resetUrl}`);
 };
 
 const resetPassword = async (token, newPassword) => {
-  const hashedToken = crypto.createHash('sha256').update(token).digest('hex');
-  const userId = await redisClient.get(`pwdReset:${hashedToken}`);
+  if (!newPassword || String(newPassword).length < 8) {
+    throw new AppError('Password must be at least 8 characters', 400);
+  }
 
-  if (!userId) {
+  const hashedToken = crypto.createHash('sha256').update(token).digest('hex');
+  let stored;
+  try {
+    stored = await redisClient.get(`pwdReset:${hashedToken}`);
+  } catch {
+    throw new AppError('Password reset is temporarily unavailable. Please try again shortly.', 503);
+  }
+
+  if (!stored) {
     throw new AppError('Token is invalid or has expired', 400);
   }
 
-  const hashedPassword = await bcrypt.hash(newPassword, 12);
+  const hashedPassword = await hashPassword(newPassword);
 
-  await prisma.user.update({
-    where: { id: userId },
-    data: { password: hashedPassword }
-  });
+  if (stored.startsWith('account:')) {
+    await prisma.account.update({
+      where: { id: stored.slice('account:'.length) },
+      data: { password: hashedPassword },
+    });
+  } else if (stored.startsWith('legacy:')) {
+    await prisma.user.update({
+      where: { id: stored.slice('legacy:'.length) },
+      data: { password: hashedPassword },
+    });
+  } else {
+    const legacy = await prisma.user.findUnique({ where: { id: stored } }).catch(() => null);
+    if (legacy) {
+      await prisma.user.update({
+        where: { id: stored },
+        data: { password: hashedPassword },
+      });
+    } else {
+      await prisma.account.update({
+        where: { id: stored },
+        data: { password: hashedPassword },
+      });
+    }
+  }
 
   await redisClient.del(`pwdReset:${hashedToken}`);
 };
