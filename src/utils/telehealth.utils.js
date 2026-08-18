@@ -281,6 +281,16 @@ const canJoinVideo = (appointment, role) => {
     return { allowed: false, reason: 'Video room is not ready yet. Choose online checkup to enable video.' };
   }
 
+  // Active consultations (in_progress) or doctor starting the room are always allowed
+  if (appointment.status === 'in_progress' || role === 'doctor') {
+    return {
+      allowed: true,
+      waitingRoom: false,
+      roomId: appointment.meeting_id,
+      joinUrl: appointment.meeting_url,
+    };
+  }
+
   const appointmentAt = getAppointmentDateTime(appointment);
   const now = new Date();
   const minutesBefore = role === 'doctor' ? DOCTOR_JOIN_MINUTES_BEFORE : PATIENT_JOIN_MINUTES_BEFORE;

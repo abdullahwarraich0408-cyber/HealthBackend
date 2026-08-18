@@ -26,6 +26,12 @@ const registerUser = async (data, meta, res) => {
     where: { email: { equals: email, mode: 'insensitive' } },
   });
   if (existingAccount) {
+    if (existingAccount.role !== 'customer' && existingAccount.role !== 'admin') {
+      throw new AppError(
+        `This email is already registered as a ${existingAccount.role} account. Use that portal, or sign up with a different email.`,
+        400
+      );
+    }
     throw new AppError('Email already in use', 400);
   }
 
@@ -40,6 +46,7 @@ const registerUser = async (data, meta, res) => {
       customer: {
         create: {
           name: data.name,
+          email,
           phone: data.phone || null,
           addresses: data.addresses,
           role: 'customer'
@@ -59,7 +66,7 @@ const loginUser = async (email, password, meta, res) => {
     include: { customer: true }
   });
   
-  if (!account || (account.role !== 'customer' && account.role !== 'admin')) {
+  if (!account) {
     // Fallback to old user table during transition
     const legacyUser = await prisma.user.findFirst({
       where: { email: { equals: normalizedEmail, mode: 'insensitive' } },
@@ -70,6 +77,13 @@ const loginUser = async (email, password, meta, res) => {
     if (!isMatch) throw new AppError('Invalid email or password', 401);
     
     return issueSession(legacyUser, null, meta, res, { includeAccessToken: false });
+  }
+
+  if (account.role !== 'customer' && account.role !== 'admin') {
+    throw new AppError(
+      `This email is registered as a ${account.role} account. Please use the ${account.role} portal to log in.`,
+      400
+    );
   }
 
   if (!account.is_active) {
@@ -85,9 +99,30 @@ const loginUser = async (email, password, meta, res) => {
     throw new AppError('Invalid email or password', 401);
   }
 
-  const profile = account.customer;
+  let profile = account.customer;
+  if (!profile && account.role === 'admin') {
+    profile = await prisma.user.findFirst({
+      where: { email: { equals: normalizedEmail, mode: 'insensitive' } },
+    });
+    if (!profile) {
+      profile = await prisma.user.create({
+        data: {
+          account_id: account.id,
+          email: normalizedEmail,
+          name: 'Super Admin',
+          role: 'admin',
+        },
+      });
+    } else if (!profile.account_id) {
+      await prisma.user.update({
+        where: { id: profile.id },
+        data: { account_id: account.id },
+      });
+    }
+  }
+
   if (!profile) {
-    throw new AppError('Customer profile not found for this account', 404);
+    throw new AppError('Profile not found for this account', 404);
   }
 
   return issueSession(profile, account, meta, res, { includeAccessToken: false });

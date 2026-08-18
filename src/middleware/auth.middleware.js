@@ -112,6 +112,33 @@ const protect = catchAsync(async (req, res, next) => {
   next();
 });
 
+const optionalAuth = catchAsync(async (req, res, next) => {
+  let token;
+  if (req.headers.authorization && req.headers.authorization.startsWith('Bearer')) {
+    token = req.headers.authorization.split(' ')[1];
+  } else if (req.cookies && req.cookies.accessToken) {
+    token = req.cookies.accessToken;
+  }
+
+  if (!token) return next();
+
+  try {
+    const decoded = jwt.verify(token, env.JWT_ACCESS_SECRET);
+    const accountId = decoded.accountId || decoded.id;
+    const currentAccount = await prisma.account.findUnique({
+      where: { id: accountId },
+      include: { customer: true, vendor: true, doctor: true, lab_partner: true }
+    });
+    if (currentAccount) {
+      const profile = currentAccount.customer || currentAccount.vendor || currentAccount.doctor || currentAccount.lab_partner;
+      req.user = { ...profile, role: currentAccount.role, accountId: currentAccount.id };
+    }
+  } catch (err) {
+    // Ignore token errors for optional auth
+  }
+  next();
+});
+
 const restrictTo = (...roles) => {
   return (req, res, next) => {
     if (!roles.includes(req.user.role)) {
@@ -121,4 +148,4 @@ const restrictTo = (...roles) => {
   };
 };
 
-module.exports = { protect, restrictTo };
+module.exports = { protect, optionalAuth, restrictTo };

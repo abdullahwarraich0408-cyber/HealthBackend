@@ -53,6 +53,9 @@ const appointmentInclude = {
   customer: { select: { id: true, name: true, email: true, phone: true } },
   prescription: true,
   review: true,
+  lab_orders: {
+    include: { lab_test: { select: { id: true, name: true, category: true, price: true } } },
+  },
 };
 
 const getFilters = async () => FILTER_OPTIONS;
@@ -383,20 +386,24 @@ const updateAppointment = async (customerId, appointmentId, data) => {
 };
 
 const joinConsultation = async (customerId, appointmentId) => {
-  const appointment = await getCustomerAppointmentById(customerId, appointmentId);
+  let appointment = await getCustomerAppointmentById(customerId, appointmentId);
 
-  const videoAccess = canJoinVideo(appointment, 'customer');
-  if (!videoAccess.allowed) {
-    throw new AppError(videoAccess.reason || 'Consultation is not ready to join yet', 400);
+  if ((appointment.preferred_consultation_mode === 'online' || isOnlineConsultation(appointment)) && !appointment.meeting_id) {
+    const { activateConsultationMode } = require('../telehealth/consultation-mode.service');
+    appointment = await activateConsultationMode(appointmentId, 'online', { allowExisting: true });
   }
 
-  if (appointment.status === 'confirmed') {
-    assertStatusTransition(appointment.status, 'in_progress');
-    return prisma.doctorAppointment.update({
+  if (['pending', 'confirmed'].includes(appointment.status)) {
+    appointment = await prisma.doctorAppointment.update({
       where: { id: appointmentId },
       data: { status: 'in_progress' },
       include: appointmentInclude,
     });
+  }
+
+  const videoAccess = canJoinVideo(appointment, 'customer');
+  if (!videoAccess.allowed) {
+    throw new AppError(videoAccess.reason || 'Consultation is not ready to join yet', 400);
   }
 
   return appointment;

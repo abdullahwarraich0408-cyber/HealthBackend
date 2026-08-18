@@ -64,6 +64,7 @@ model User {
   medical_documents    MedicalDocument[]
   record_shares        RecordShare[]
   inventory_reservations InventoryReservation[]
+  offer_redemptions      OfferRedemption[]
 
   community_posts          CommunityPost[]
   community_comments       CommunityComment[]
@@ -629,20 +630,85 @@ model Coupon {
 }
 
 model Offer {
-  id                  String   @id @default(uuid())
-  vendor_id           String
-  product_id          String
-  discount_percentage Float
-  start_date          DateTime
-  expiry_date         DateTime
-  is_active           Boolean  @default(true)
-  created_at          DateTime @default(now())
-  updated_at          DateTime @updatedAt
+  id                      String   @id @default(uuid())
+  title                   String
+  short_description       String   @default("")
+  description             String   @default("")
+  type                    String   @default("PERCENTAGE_DISCOUNT") // PERCENTAGE_DISCOUNT, FIXED_DISCOUNT, FREE_DELIVERY, PROMO_CODE, BANK_OFFER, WALLET_OFFER, PRODUCT_DISCOUNT, CATEGORY_DISCOUNT, PROVIDER_DISCOUNT, FIRST_ORDER, FIRST_BOOKING
+  discount_type           String   @default("PERCENTAGE") // PERCENTAGE, FIXED, FREE_DELIVERY
+  percentage_value        Float?
+  fixed_amount            Float?
+  promo_code              String?
+  start_at                DateTime @default(now())
+  end_at                  DateTime
+  status                  String   @default("ACTIVE") // DRAFT, SCHEDULED, ACTIVE, PAUSED, EXPIRED, EXHAUSTED
+  minimum_order_amount    Float    @default(0.0)
+  maximum_discount_amount Float?
+  total_usage_limit       Int?
+  used_count              Int      @default(0)
+  usage_per_user          Int      @default(1)
+  new_users_only          Boolean  @default(false)
+  automatic_apply         Boolean  @default(true)
+  stackable               Boolean  @default(false)
+  funding_source          String   @default("MEDZOOS") // MEDZOOS, PHARMACY, LAB, DOCTOR, BANK, SHARED
 
-  vendor              Vendor   @relation(fields: [vendor_id], references: [id])
-  product             Product  @relation(fields: [product_id], references: [id])
+  // Granular targeting arrays (stored as JSON)
+  city_ids                Json?
+  vendor_ids              Json?
+  lab_ids                 Json?
+  doctor_ids              Json?
+  product_ids             Json?
+  category_ids            Json?
+  lab_test_ids            Json?
+  payment_method_ids      Json?
 
+  // Visuals & Terms
+  banner_image            String?
+  thumbnail_image         String?
+  partner_logo            String?
+  terms_and_conditions    String?
+
+  // Optional relations
+  vendor_id               String?
+  product_id              String?
+  discount_percentage     Float?
+  start_date              DateTime?
+  expiry_date             DateTime?
+  is_active               Boolean  @default(true)
+  created_at              DateTime @default(now())
+  updated_at              DateTime @updatedAt
+
+  vendor                  Vendor?  @relation(fields: [vendor_id], references: [id])
+  product                 Product? @relation(fields: [product_id], references: [id])
+  redemptions             OfferRedemption[]
+
+  @@index([status, start_at, end_at])
+  @@index([promo_code])
+  @@index([type])
   @@map("offers")
+}
+
+model OfferRedemption {
+  id              String   @id @default(uuid())
+  offer_id        String
+  user_id         String
+  order_id        String?
+  booking_id      String?
+  appointment_id  String?
+  original_amount Float
+  discount_amount Float
+  final_amount    Float
+  status          String   @default("REDEEMED") // RESERVED, REDEEMED, REVERSED
+  redeemed_at     DateTime @default(now())
+
+  offer           Offer    @relation(fields: [offer_id], references: [id], onDelete: Cascade)
+  user            User     @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@index([offer_id, user_id])
+  @@index([order_id])
+  @@index([booking_id])
+  @@index([appointment_id])
+  @@map("offer_redemptions")
 }
 
 model ReturnRequest {

@@ -53,6 +53,7 @@ router.use('/customer/cart', customerCartRoutes);
 router.use('/payments', paymentsRoutes);
 router.use('/prescriptions', prescriptionsRoutes);
 router.use('/coupons', couponRoutes);
+router.use('/offers', vendorOfferRoutes);
 router.use('/vendor/offers', vendorOfferRoutes);
 router.use('/vendor/inventory', inventoryRouter);
 router.use('/vendor/products', productsRouter);

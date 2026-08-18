@@ -37,6 +37,8 @@ const envSchema = z.object({
   OPENAI_OCR_PARSE_MODEL: z.string().default('gpt-4o'),
   PRESCRIPTION_OCR_TWO_PASS: z.string().default('true'),
   GOOGLE_VISION_API_KEY: z.string().optional(),
+  GOOGLE_CLIENT_ID: z.string().optional(),
+  GOOGLE_CLIENT_SECRET: z.string().optional(),
   PRESCRIPTION_OCR_PROVIDER: z
     .enum(['auto', 'openai', 'google', 'stub'])
     .default('auto'),

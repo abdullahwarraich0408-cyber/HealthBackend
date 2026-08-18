@@ -461,6 +461,8 @@ async function main() {
     data: { account_id: vendor2Account.id },
   });
 
+  if (prisma.inventoryReservation) await prisma.inventoryReservation.deleteMany({});
+  if (prisma.cartItem) await prisma.cartItem.deleteMany({});
   await prisma.orderItem.deleteMany({});
   await prisma.order.deleteMany({});
   await prisma.product.deleteMany({});
