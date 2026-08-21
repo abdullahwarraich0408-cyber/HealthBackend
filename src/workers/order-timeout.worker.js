@@ -22,6 +22,12 @@ function startOrderTimeoutWorker() {
         logger.info(`Prescription accept timeout processed for ${job.data.orderId}`);
         return;
       }
+      if (job.name === 'prescription-quotation-expiry') {
+        const service = require('../modules/prescription-orders/prescription-orders.service');
+        await service.expireQuotation(job.data.orderId);
+        logger.info(`Prescription quotation expiry processed for ${job.data.orderId}`);
+        return;
+      }
       logger.info(`Processing order timeout for job ${job.id}`);
     },
     { connection: redis }
