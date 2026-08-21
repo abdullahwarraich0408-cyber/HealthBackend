@@ -4,6 +4,7 @@ const { emitOrderUpdated, emitOrderNew } = require('../../utils/orderTracking.so
 const inventoryReservationsService = require('./inventory-reservations.service');
 const vendorNotificationsService = require('../notifications/vendor-notifications.service');
 const customerNotificationsService = require('../notifications/customer-notifications.service');
+const inboxEvents = require('../notifications/inbox.events');
 const { recordAuditEntry } = require('../vendors/vendor-audit.service');
 
 const createOrdersFromCart = async (customerId, items, deliveryAddress, options = {}) => {
@@ -110,13 +111,33 @@ const createOrdersFromCart = async (customerId, items, deliveryAddress, options 
       for (const vendorId in vendorGroups) {
         const group = vendorGroups[vendorId];
 
+        const year = new Date().getFullYear();
+        const sequence = (await tx.order.count({
+          where: { created_at: { gte: new Date(`${year}-01-01T00:00:00.000Z`) } },
+        })) + createdOrders.length + 1;
+        const { generateOrderNumber } = require('../pharmacy/order-transitions');
+        const { calculateOrderFinancials } = require('../pharmacy/money');
+        const vendor = await tx.vendor.findUnique({ where: { id: group.vendor_id } });
+        const financials = calculateOrderFinancials({
+          subtotal: group.subtotal,
+          deliveryFee: group.total_amount - group.subtotal - group.subtotal * 0.05,
+          commissionRate: vendor?.commission_rate,
+        });
+
         const order = await tx.order.create({
           data: {
             customer_id: customerId,
             vendor_id: group.vendor_id,
+            order_number: generateOrderNumber(sequence, year),
             total_amount: group.total_amount,
+            subtotal: group.subtotal,
+            platform_fee: financials.platformFee,
+            commission_amount: financials.commission,
+            vendor_net: financials.vendorNet,
+            payment_status: 'unpaid',
             requires_prescription: group.requires_prescription,
             delivery_address: deliveryAddress,
+            status: 'awaiting_payment',
             items: {
               create: group.items,
             },
@@ -126,12 +147,28 @@ const createOrdersFromCart = async (customerId, items, deliveryAddress, options 
 
         createdOrders.push(order);
 
+        const inventoryService = require('../inventory/inventory.service');
         for (const item of group.items) {
-          await tx.product.update({
-            where: { id: item.product_id },
-            data: { stock: { decrement: item.quantity } },
+          await inventoryService.applyOrderStockChange(tx, {
+            vendorId: group.vendor_id,
+            productId: item.product_id,
+            quantity: item.quantity,
+            type: 'ORDER_RESERVED',
+            referenceId: order.id,
+            performedBy: customerId,
           });
         }
+
+        await tx.orderEvent.create({
+          data: {
+            vendor_id: group.vendor_id,
+            order_id: order.id,
+            status: 'awaiting_payment',
+            note: 'Order placed — awaiting Stripe payment',
+            actor_id: customerId,
+            actor_type: 'CUSTOMER',
+          },
+        });
 
         if (activeLock) {
           await tx.inventoryReservation.updateMany({
@@ -179,6 +216,8 @@ const createOrdersFromCart = async (customerId, items, deliveryAddress, options 
       },
     });
 
+    await inboxEvents.newOrder({ order, customerId });
+
     await recordAuditEntry({
       vendorId: order.vendor_id,
       userId: customerId,
@@ -210,30 +249,181 @@ const getCustomerOrders = async (customerId) => {
   });
 };
 
-const getVendorOrders = async (vendorId) => {
-  return prisma.order.findMany({
-    where: { vendor_id: vendorId },
+const ORDER_INCLUDE = {
+  items: {
     include: {
-      items: {
-        include: {
-          product: true
-        }
-      },
-      customer: { select: { name: true, email: true } }
+      product: true,
     },
-    orderBy: { created_at: 'desc' }
-  });
+  },
+  customer: { select: { name: true, email: true, phone: true } },
+  events: { orderBy: { created_at: 'asc' } },
 };
 
-const updateOrderStatus = async (orderId, vendorId, status) => {
-  const order = await prisma.order.findUnique({ where: { id: orderId } });
-  
+const getVendorOrders = async (vendorId, query = {}) => {
+  const page = Math.max(1, Number(query.page) || 1);
+  const pageSize = [10, 20, 50, 100].includes(Number(query.pageSize)) ? Number(query.pageSize) : 20;
+  const search = String(query.search || '').trim();
+  const status = query.status;
+
+  const where = {
+    vendor_id: vendorId,
+    // Hide unpaid Stripe holds from pharmacy ops until payment clears
+    NOT: {
+      AND: [{ status: 'awaiting_payment' }, { payment_status: { in: ['unpaid', 'pending'] } }],
+    },
+    ...(status ? { status: { in: [status, status.toUpperCase(), status.toLowerCase()] } } : {}),
+    ...(query.payment_status ? { payment_status: query.payment_status } : {}),
+    ...(query.delivery_type || query.delivery_method
+      ? { delivery_method: query.delivery_type || query.delivery_method }
+      : {}),
+    ...(query.prescription === 'true' ? { requires_prescription: true } : {}),
+    ...(query.prescription === 'false' ? { requires_prescription: false } : {}),
+    ...(query.from || query.to
+      ? {
+          created_at: {
+            ...(query.from ? { gte: new Date(query.from) } : {}),
+            ...(query.to ? { lte: new Date(query.to) } : {}),
+          },
+        }
+      : {}),
+    ...(search
+      ? {
+          OR: [
+            { order_number: { contains: search, mode: 'insensitive' } },
+            { customer: { name: { contains: search, mode: 'insensitive' } } },
+            { customer: { phone: { contains: search, mode: 'insensitive' } } },
+            { items: { some: { product: { name: { contains: search, mode: 'insensitive' } } } } },
+          ],
+        }
+      : {}),
+  };
+
+  const [items, total] = await Promise.all([
+    prisma.order.findMany({
+      where,
+      include: ORDER_INCLUDE,
+      orderBy: { created_at: 'desc' },
+      skip: (page - 1) * pageSize,
+      take: pageSize,
+    }),
+    prisma.order.count({ where }),
+  ]);
+
+  return { items, page, pageSize, total };
+};
+
+const getVendorOrderById = async (orderId, vendorId) => {
+  const order = await prisma.order.findFirst({
+    where: { id: orderId, vendor_id: vendorId },
+    include: ORDER_INCLUDE,
+  });
+  if (!order) throw new AppError('Order not found', 404);
+  return order;
+};
+
+const updateOrderStatus = async (orderId, vendorId, status, extra = {}) => {
+  const {
+    assertTransition,
+    toCanonicalStatus,
+    timestampFieldForStatus,
+  } = require('../pharmacy/order-transitions');
+  const inventoryService = require('../inventory/inventory.service');
+  const { calculateOrderFinancials } = require('../pharmacy/money');
+
+  const order = await prisma.order.findUnique({
+    where: { id: orderId },
+    include: { items: true, vendor: true },
+  });
+
   if (!order) throw new AppError('Order not found', 404);
   if (order.vendor_id !== vendorId) throw new AppError('Unauthorized', 403);
 
-  const updatedOrder = await prisma.order.update({
-    where: { id: orderId },
-    data: { status }
+  const nextStatus = toCanonicalStatus(status);
+  try {
+    assertTransition(order.status, nextStatus);
+  } catch (error) {
+    throw new AppError(error.message || 'This order has already been updated.', 400);
+  }
+
+  if (nextStatus === 'REJECTED' && !extra.reason && !extra.rejection_reason) {
+    throw new AppError('A rejection reason is required', 400);
+  }
+
+  const timestampField = timestampFieldForStatus(nextStatus);
+  const updateData = {
+    status: nextStatus,
+    ...(timestampField ? { [timestampField]: new Date() } : {}),
+    ...(nextStatus === 'REJECTED'
+      ? {
+          rejection_reason: extra.reason || extra.rejection_reason,
+          cancelled_by: extra.cancelled_by || 'VENDOR',
+          cancellation_reason: extra.reason || extra.rejection_reason,
+        }
+      : {}),
+    ...(nextStatus === 'CANCELLED'
+      ? {
+          cancelled_by: extra.cancelled_by || 'VENDOR',
+          cancellation_reason: extra.reason || extra.cancellation_reason || null,
+        }
+      : {}),
+  };
+
+  if (nextStatus === 'COMPLETED') {
+    const financials = calculateOrderFinancials({
+      subtotal: order.subtotal || order.total_amount,
+      deliveryFee: order.delivery_fee,
+      commissionRate: order.vendor?.commission_rate,
+      refundAmount: order.refund_amount,
+    });
+    updateData.commission_amount = financials.commission;
+    updateData.platform_fee = financials.platformFee;
+    updateData.vendor_net = financials.vendorNet;
+  }
+
+  const updatedOrder = await prisma.$transaction(async (tx) => {
+    const saved = await tx.order.update({
+      where: { id: orderId },
+      data: updateData,
+    });
+
+    await tx.orderEvent.create({
+      data: {
+        vendor_id: vendorId,
+        order_id: orderId,
+        status: nextStatus,
+        note: extra.reason || extra.note || null,
+        actor_id: extra.performedBy || vendorId,
+        actor_type: extra.cancelled_by || 'VENDOR',
+      },
+    });
+
+    if (['CANCELLED', 'REJECTED'].includes(nextStatus)) {
+      for (const item of order.items) {
+        await inventoryService.applyOrderStockChange(tx, {
+          vendorId,
+          productId: item.product_id,
+          quantity: item.quantity,
+          type: 'ORDER_RELEASED',
+          referenceId: orderId,
+          performedBy: vendorId,
+        });
+      }
+    }
+
+    if (nextStatus === 'COMPLETED') {
+      for (const item of order.items) {
+        await inventoryService.applyOrderStockChange(tx, {
+          vendorId,
+          productId: item.product_id,
+          quantity: item.quantity,
+          type: 'SALE',
+          referenceId: orderId,
+          performedBy: vendorId,
+        });
+      }
+    }
+
+    return saved;
   });
 
   try {
@@ -266,6 +456,12 @@ const updateOrderStatus = async (orderId, vendorId, status) => {
     orderType: 'medicine',
   });
 
+  await inboxEvents.orderStatus({
+    orderId,
+    customerId: order.customer_id,
+    status,
+  });
+
   await recordAuditEntry({
     vendorId,
     userId: vendorId,
@@ -282,5 +478,6 @@ module.exports = {
   createOrdersFromCart,
   getCustomerOrders,
   getVendorOrders,
+  getVendorOrderById,
   updateOrderStatus
 };

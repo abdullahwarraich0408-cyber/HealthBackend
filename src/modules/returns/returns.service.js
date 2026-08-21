@@ -1,5 +1,6 @@
 const prisma = require('../../config/database');
 const AppError = require('../../utils/AppError');
+const inboxEvents = require('../notifications/inbox.events');
 
 const requestReturn = async (customerId, { order_id, reason }) => {
   // Verify order exists
@@ -12,7 +13,7 @@ const requestReturn = async (customerId, { order_id, reason }) => {
   }
 
   // Create return request
-  return prisma.returnRequest.create({
+  const returnRequest = await prisma.returnRequest.create({
     data: {
       order_id,
       customer_id: customerId,
@@ -20,6 +21,9 @@ const requestReturn = async (customerId, { order_id, reason }) => {
       status: 'pending'
     }
   });
+
+  await inboxEvents.returnRequested(returnRequest, order);
+  return returnRequest;
 };
 
 const getCustomerReturns = async (customerId) => {
@@ -48,13 +52,65 @@ const updateReturnStatus = async (adminId, returnId, { status, notes }) => {
   });
   if (!returnRequest) throw new AppError('Return request not found', 404);
 
-  return prisma.returnRequest.update({
+  const updated = await prisma.returnRequest.update({
     where: { id: returnId },
     data: {
       status,
       notes: notes || returnRequest.notes
     }
   });
+
+  await inboxEvents.returnResolved(updated, status);
+  return updated;
+};
+
+const getVendorReturns = async (vendorId) => {
+  return prisma.returnRequest.findMany({
+    where: { order: { vendor_id: vendorId } },
+    include: {
+      order: {
+        select: {
+          id: true,
+          order_number: true,
+          total_amount: true,
+          status: true,
+          created_at: true,
+          vendor_id: true,
+        },
+      },
+      customer: { select: { name: true, phone: true } },
+    },
+    orderBy: { created_at: 'desc' },
+  });
+};
+
+const updateVendorReturn = async (vendorId, returnId, { status, notes, refund_amount }) => {
+  const returnRequest = await prisma.returnRequest.findUnique({
+    where: { id: returnId },
+    include: { order: true },
+  });
+  if (!returnRequest) throw new AppError('Return request not found', 404);
+  if (returnRequest.order.vendor_id !== vendorId) {
+    throw new AppError('You do not have permission to process this return request', 403);
+  }
+
+  const nextStatus = String(status || '').toLowerCase();
+  const allowed = ['requested', 'pending', 'under_review', 'approved', 'rejected', 'received', 'refunded', 'processed', 'closed'];
+  if (status && !allowed.includes(nextStatus)) {
+    throw new AppError('Invalid return status', 400);
+  }
+
+  const updated = await prisma.returnRequest.update({
+    where: { id: returnId },
+    data: {
+      ...(status ? { status: nextStatus } : {}),
+      ...(notes !== undefined ? { notes } : {}),
+      ...(refund_amount !== undefined ? { refund_amount } : {}),
+    },
+  });
+
+  await inboxEvents.returnResolved(updated, updated.status);
+  return updated;
 };
 
 const processReturn = async (vendorId, returnId, { refund_amount, notes }) => {
@@ -64,12 +120,10 @@ const processReturn = async (vendorId, returnId, { refund_amount, notes }) => {
   });
   if (!returnRequest) throw new AppError('Return request not found', 404);
 
-  // Verify that this return belongs to the vendor's order
   if (returnRequest.order.vendor_id !== vendorId) {
     throw new AppError('You do not have permission to process this return request', 403);
   }
 
-  // Only approved return requests can be processed by the vendor
   if (returnRequest.status !== 'approved') {
     throw new AppError('Only approved return requests can be processed', 400);
   }
@@ -91,6 +145,8 @@ const processReturn = async (vendorId, returnId, { refund_amount, notes }) => {
 module.exports = {
   requestReturn,
   getCustomerReturns,
+  getVendorReturns,
+  updateVendorReturn,
   updateReturnStatus,
   processReturn
 };

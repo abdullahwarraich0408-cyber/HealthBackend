@@ -17,6 +17,8 @@ router.use(protect);
 router.use(restrictTo('vendor'));
 router.post('/', validate(productsValidator.createProductSchema), productsController.createProduct);
 router.patch('/:id', validate(productsValidator.updateProductSchema), productsController.updateProduct);
+router.post('/:id/duplicate', productsController.duplicateProduct);
+router.patch('/:id/listing', productsController.setListingStatus);
 router.delete('/:id', productsController.deleteProduct);
 
 module.exports = router;

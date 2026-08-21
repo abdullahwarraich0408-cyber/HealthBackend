@@ -308,10 +308,10 @@ const assertPartnerPortalAccess = (portal, accountRole) => {
   );
 };
 
-const loginPartner = async (portal, email, password) => {
+const loginPartner = async (portal, email, password, meta = {}) => {
   const account = await prisma.account.findUnique({ 
     where: { email: email.trim().toLowerCase() },
-    include: { vendor: true, doctor: true, lab_partner: true }
+    include: { vendor: true, doctor: true, lab_partner: true, vendor_staff: true }
   });
 
   if (!account) {
@@ -340,10 +340,27 @@ const loginPartner = async (portal, email, password) => {
   let profile = null;
   if (portal === 'vendor') {
     profile = account.vendor;
-    if (!profile) throw new AppError('Vendor profile not found for this account', 403);
-    if (!isApprovedPartnerStatus(profile.status)) {
-      throw new AppError('Your account is pending approval or rejected', 403);
+    if (!profile && account.vendor_staff) {
+      const staff = account.vendor_staff;
+      if (staff.status !== 'active') throw new AppError('Your staff account is disabled', 403);
+      profile = await prisma.vendor.findUnique({ where: { id: staff.vendor_id } });
+      if (!profile) throw new AppError('Vendor profile not found for this account', 403);
+      profile = { ...profile, staffRole: staff.role, staffId: staff.id, staffName: staff.name };
     }
+    if (!profile) throw new AppError('Vendor profile not found for this account', 403);
+    if (String(profile.status).toLowerCase() === 'rejected') {
+      throw new AppError('Your vendor account was rejected. Contact Medzoos support.', 403);
+    }
+    await prisma.vendorLoginActivity.create({
+      data: {
+        vendor_id: profile.id,
+        account_id: account.id,
+        staff_id: profile.staffId || null,
+        ip_address: meta.ip || null,
+        user_agent: meta.userAgent || null,
+        success: true,
+      },
+    }).catch(() => {});
   } else if (portal === 'doctor') {
     profile = account.doctor;
     if (!profile) throw new AppError('Doctor profile not found for this account', 403);

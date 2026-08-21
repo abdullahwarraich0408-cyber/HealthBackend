@@ -57,6 +57,9 @@ const getBookings = async (labId) => labTestsService.getLabBookings(labId);
 const updateBookingStatus = async (labId, bookingId, status, note) =>
   labTestsService.updateBookingStatus(labId, bookingId, status, note);
 
+const markPaymentReceived = async (labId, bookingId) =>
+  labTestsService.markPaymentReceived(labId, bookingId);
+
 const uploadReport = async (labId, bookingId, reportUrl) =>
   labTestsService.uploadReport(labId, bookingId, reportUrl);
 
@@ -171,6 +174,7 @@ module.exports = {
   updatePassword,
   getBookings,
   updateBookingStatus,
+  markPaymentReceived,
   uploadReport,
   assignCollector,
   getTests,

@@ -100,6 +100,17 @@ const markPacked = catchAsync(async (req, res) => {
   sendResponse(res, 200, { order }, 'Order marked as packed');
 });
 
+const reviewPrescription = catchAsync(async (req, res) => {
+  const result = await prescriptionOrdersService.reviewPrescription(req.params.id, req.user, req.body);
+  sendResponse(res, 200, result, 'Prescription review saved');
+});
+
+const getDocument = catchAsync(async (req, res) => {
+  const order = await prescriptionOrdersService.getOrderById(req.params.id, req.user.id, req.user.role);
+  if (!order?.file_url) throw new AppError('Prescription document not found', 404);
+  sendResponse(res, 200, { url: order.file_url, expires_in: 300 }, 'Prescription document authorized');
+});
+
 const retrySearch = catchAsync(async (req, res) => {
   const order = await prescriptionOrdersService.retryVendorSearch(req.params.id, req.user.id);
   sendResponse(res, 200, { order }, 'Searching for pharmacies again...');
@@ -119,4 +130,6 @@ module.exports = {
   updateStatus,
   markPacked,
   retrySearch,
+  reviewPrescription,
+  getDocument,
 };

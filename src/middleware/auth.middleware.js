@@ -33,6 +33,7 @@ const protect = catchAsync(async (req, res, next) => {
       vendor: true,
       doctor: true,
       lab_partner: true,
+      vendor_staff: true,
     }
   });
 
@@ -86,10 +87,25 @@ const protect = catchAsync(async (req, res, next) => {
 
   // Attach profile to req.user based on role
   let profile = null;
+  let staffRole = 'OWNER';
+  let staffId = null;
   if (currentAccount.role === 'customer' || currentAccount.role === 'admin') {
     profile = currentAccount.customer;
   } else if (currentAccount.role === 'vendor') {
     profile = currentAccount.vendor;
+    if (!profile && currentAccount.vendor_staff) {
+      const staff = currentAccount.vendor_staff;
+      if (staff.status !== 'active') {
+        return next(new AppError('Your staff account is disabled.', 403));
+      }
+      const vendorProfile = await prisma.vendor.findUnique({ where: { id: staff.vendor_id } });
+      if (!vendorProfile) {
+        return next(new AppError('Pharmacy profile not found for this staff account.', 401));
+      }
+      profile = vendorProfile;
+      staffRole = staff.role;
+      staffId = staff.id;
+    }
   } else if (currentAccount.role === 'doctor') {
     profile = currentAccount.doctor;
   } else if (currentAccount.role === 'lab') {
@@ -103,12 +119,19 @@ const protect = catchAsync(async (req, res, next) => {
   if (
     currentAccount.role === 'vendor' &&
     profile?.status &&
-    !['approved', 'active'].includes(profile.status)
+    ['rejected'].includes(String(profile.status).toLowerCase())
   ) {
-    return next(new AppError('Your vendor account is pending approval or suspended.', 403));
+    return next(new AppError('Your vendor account was rejected. Contact Medzoos support.', 403));
   }
 
-  req.user = { ...profile, role: currentAccount.role, accountId: currentAccount.id };
+  req.user = {
+    ...profile,
+    role: currentAccount.role,
+    accountId: currentAccount.id,
+    staffRole,
+    staffId,
+    sellingAllowed: currentAccount.role !== 'vendor' || ['approved', 'active'].includes(String(profile.status || '').toLowerCase()),
+  };
   next();
 });
 

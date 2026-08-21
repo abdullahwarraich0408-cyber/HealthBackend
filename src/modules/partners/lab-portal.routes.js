@@ -13,6 +13,7 @@ router.patch('/profile', labPortalController.updateProfile);
 router.patch('/password', labPortalController.updatePassword);
 router.get('/bookings', labPortalController.getBookings);
 router.patch('/bookings/:id/status', labPortalController.updateBookingStatus);
+router.patch('/bookings/:id/payment', labPortalController.markPaymentReceived);
 router.patch('/bookings/:id/report', validate(labTestsValidator.uploadReportSchema), labPortalController.uploadReport);
 router.post('/bookings/:id/report-file', upload.single('report'), labPortalController.uploadReportFile);
 router.patch('/bookings/:id/collector', labPortalController.assignCollector);

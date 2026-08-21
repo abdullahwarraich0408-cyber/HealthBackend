@@ -37,7 +37,18 @@ const firebaseAuthSchema = z.object({
   }),
 });
 
-const googleAuthSchema = firebaseAuthSchema;
+const googleAuthSchema = z.object({
+  body: z
+    .object({
+      idToken: z.string().min(10).optional(),
+      code: z.string().min(10).optional(),
+      deviceId: z.string().min(1).optional(),
+      platform: z.enum(['web', 'android', 'ios']).optional(),
+    })
+    .refine((body) => Boolean(body.idToken || body.code), {
+      message: 'Either idToken or code is required',
+    }),
+});
 const appleAuthSchema = firebaseAuthSchema;
 
 const refreshSchema = z.object({

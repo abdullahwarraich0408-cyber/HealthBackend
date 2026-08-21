@@ -37,11 +37,18 @@ const getMyOrders = catchAsync(async (req, res) => {
 });
 
 const getVendorOrders = catchAsync(async (req, res) => {
-  const orders = await ordersService.getVendorOrders(req.user.id);
-  sendResponse(res, 200, { orders }, 'Vendor orders fetched successfully');
+  const result = await ordersService.getVendorOrders(req.user.id, req.query);
+  const orders = Array.isArray(result) ? result : result.items;
+  sendResponse(res, 200, { orders, ...(!Array.isArray(result) ? { page: result.page, pageSize: result.pageSize, total: result.total } : {}) }, 'Vendor orders fetched successfully');
 });
 
 const getOrderDetails = catchAsync(async (req, res) => {
+  if (req.user.role === 'vendor') {
+    const order = await ordersService.getVendorOrderById(req.params.id, req.user.id);
+    sendResponse(res, 200, { order }, 'Order details fetched');
+    return;
+  }
+
   const order = await prisma.order.findUnique({
     where: { id: req.params.id },
     include: {
@@ -49,7 +56,8 @@ const getOrderDetails = catchAsync(async (req, res) => {
         include: { product: { select: { name: true, image_url: true } } }
       },
       customer: { select: { name: true, email: true, phone: true } },
-      vendor: { select: { business_name: true, email: true } }
+      vendor: { select: { business_name: true, email: true } },
+      events: { orderBy: { created_at: 'asc' } },
     }
   });
 
@@ -57,11 +65,7 @@ const getOrderDetails = catchAsync(async (req, res) => {
     throw new AppError('Order not found', 404);
   }
 
-  // Ensure user is authorized to view
   if (req.user.role === 'customer' && order.customer_id !== req.user.id) {
-    throw new AppError('Unauthorized access to order', 403);
-  }
-  if (req.user.role === 'vendor' && order.vendor_id !== req.user.id) {
     throw new AppError('Unauthorized access to order', 403);
   }
 
@@ -69,8 +73,15 @@ const getOrderDetails = catchAsync(async (req, res) => {
 });
 
 const updateOrderStatus = catchAsync(async (req, res) => {
-  const { status } = req.body;
-  const order = await ordersService.updateOrderStatus(req.params.id, req.user.id, status);
+  const { status, reason, rejection_reason, cancellation_reason, note } = req.body;
+  const order = await ordersService.updateOrderStatus(req.params.id, req.user.id, status, {
+    reason,
+    rejection_reason,
+    cancellation_reason,
+    note,
+    performedBy: req.user.accountId || req.user.id,
+    cancelled_by: 'VENDOR',
+  });
   sendResponse(res, 200, { order }, 'Order status updated successfully');
 });
 

@@ -363,6 +363,9 @@ router.patch('/vendors/:id/status', catchAsync(async (req, res) => {
     details: note ? { note } : { status },
   });
 
+  const inboxEvents = require('../notifications/inbox.events');
+  await inboxEvents.vendorStatusChanged(vendor, status, note);
+
   res.json({ status: 'success', message: `Vendor marked as ${status}`, data: { vendor } });
 }));
 
@@ -391,6 +394,9 @@ router.patch('/vendors/:id/approval', catchAsync(async (req, res) => {
     entityId: id,
     details: { status, note },
   });
+
+  const inboxEvents = require('../notifications/inbox.events');
+  await inboxEvents.vendorStatusChanged(vendor, status, note);
 
   res.json({ status: 'success', data: { vendor } });
 }));

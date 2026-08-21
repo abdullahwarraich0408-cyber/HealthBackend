@@ -183,8 +183,12 @@ const assertStatusTransition = (currentStatus, nextStatus) => {
 };
 
 const resolvePaymentStatus = (paymentMethod) => {
-  if (!paymentMethod || paymentMethod === 'cod') return 'pending';
-  return 'paid';
+  const method = String(paymentMethod || '').toLowerCase();
+  // COD and online (Stripe) both start pending — Stripe marks paid after verify
+  if (!method || method === 'cod' || method === 'stripe' || method === 'card' || method === 'online') {
+    return 'pending';
+  }
+  return 'pending';
 };
 
 const CHAT_OPEN_HOURS_BEFORE = 24;

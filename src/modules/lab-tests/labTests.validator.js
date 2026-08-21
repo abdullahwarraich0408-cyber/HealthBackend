@@ -42,19 +42,38 @@ const createLabOrderSchema = z.object({
   }),
 });
 
+const normalizeBookingStatus = (status = '') => {
+  const s = String(status || '').trim().toLowerCase().replace(/[\s-]+/g, '_');
+  if (s === 'new' || s === 'pending') return 'pending';
+  if (s === 'accepted' || s === 'confirmed') return 'confirmed';
+  if (s === 'collector_assigned' || s === 'dispatched') return 'collector_assigned';
+  if (s === 'sample_collected' || s === 'collected') return 'sample_collected';
+  if (s === 'processing' || s === 'testing' || s === 'in_progress') return 'testing';
+  if (s === 'report_ready' || s === 'report_uploaded' || s === 'ready') return 'report_uploaded';
+  if (s === 'completed' || s === 'done') return 'completed';
+  if (s === 'cancelled' || s === 'canceled') return 'cancelled';
+  if (s === 'rejected' || s === 'declined') return 'rejected';
+  return s;
+};
+
 const updateBookingStatusSchema = z.object({
   body: z.object({
-    status: z.enum([
-      'pending',
-      'confirmed',
-      'collector_assigned',
-      'sample_collected',
-      'testing',
-      'report_uploaded',
-      'completed',
-      'cancelled',
-      'rejected',
-    ]),
+    status: z
+      .string()
+      .transform((val) => normalizeBookingStatus(val))
+      .pipe(
+        z.enum([
+          'pending',
+          'confirmed',
+          'collector_assigned',
+          'sample_collected',
+          'testing',
+          'report_uploaded',
+          'completed',
+          'cancelled',
+          'rejected',
+        ])
+      ),
     note: z.string().optional(),
   }),
 });
@@ -67,8 +86,13 @@ const uploadReportSchema = z.object({
 
 const assignCollectorSchema = z.object({
   body: z.object({
-    collector_name: z.string().min(1),
-    collector_phone: z.string().min(1),
+    collector_id: z.string().optional(),
+    collector_name: z.string().optional(),
+    collector_phone: z.string().optional(),
+    name: z.string().optional(),
+    phone: z.string().optional(),
+    note: z.string().optional(),
+    notes: z.string().optional(),
   }),
 });
 

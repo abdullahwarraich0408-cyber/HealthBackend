@@ -49,9 +49,9 @@ const firebaseLogin = catchAsync(async (req, res) => {
 });
 
 const googleLogin = catchAsync(async (req, res) => {
-  const { idToken, deviceId, platform } = req.body;
-  const result = await firebaseAuthService.authenticateWithGoogleIdToken(
-    idToken,
+  const { idToken, code, deviceId, platform } = req.body;
+  const result = await firebaseAuthService.authenticateWithGoogle(
+    { idToken, code },
     { deviceId: deviceId || req.headers['x-device-id'], platform: platform || 'web' },
     res,
   );
@@ -145,7 +145,10 @@ const resetPassword = catchAsync(async (req, res) => {
 
 const partnerLogin = catchAsync(async (req, res) => {
   const { portal, email, password } = req.body;
-  const { partner, role, tokens } = await authService.loginPartner(portal, email, password);
+  const { partner, role, tokens } = await authService.loginPartner(portal, email, password, {
+    ip: req.ip,
+    userAgent: req.headers['user-agent'],
+  });
 
   setTokenCookies(res, tokens.accessToken, tokens.refreshToken);
 

@@ -29,7 +29,18 @@ router.get('/settlements', vendorsController.getSettlements);
 router.get('/analytics/overview', vendorsController.getAnalyticsOverview);
 router.get('/analytics/performance', vendorsController.getPerformanceMetrics);
 router.get('/audit-logs', vendorsController.getAuditLogs);
+router.get('/sales-report', vendorsController.getSalesReport);
+router.get('/payouts/overview', vendorsController.getPayoutOverview);
+router.get('/catalog', vendorsController.getCatalog);
+router.get('/products/search', vendorsController.searchProducts);
 router.get('/products/mine', vendorsController.getMyProducts);
+router.get('/products/:id', vendorsController.getMyProduct);
 router.get('/dashboard/stats', vendorsController.getDashboardStats);
+router.get('/staff', vendorsController.listStaff);
+router.post('/staff', vendorsController.inviteStaff);
+router.patch('/staff/:id', vendorsController.updateStaff);
+router.post('/security/password', vendorsController.changePassword);
+router.get('/security/activity', vendorsController.listLoginActivity);
+router.post('/security/sign-out-others', vendorsController.signOutOtherSessions);
 
 module.exports = router;

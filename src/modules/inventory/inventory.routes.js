@@ -19,15 +19,15 @@ productsRouter.use(restrictTo('vendor'));
 // Vendor Inventory endpoints
 // POST /api/vendor/inventory/bulk
 inventoryRouter.post('/bulk', upload.single('file'), inventoryController.bulkImport);
-
-// GET /api/vendor/inventory/low-stock
+inventoryRouter.post('/validate', upload.single('file'), inventoryController.validateImport);
+inventoryRouter.get('/', inventoryController.listInventory);
+inventoryRouter.get('/batches', inventoryController.listBatches);
+inventoryRouter.post('/batches', inventoryController.addBatch);
+inventoryRouter.get('/expiring', inventoryController.listExpiring);
 inventoryRouter.get('/low-stock', validate(inventoryValidator.lowStockSchema), inventoryController.getLowStock);
-
-// POST /api/vendor/inventory/sync
 inventoryRouter.post('/sync', inventoryController.syncInventory);
+inventoryRouter.post('/:id/adjust', inventoryController.adjustInventory);
 
-// Vendor Products endpoints
-// PUT /api/vendor/products/:id/stock
 productsRouter.put('/:id/stock', validate(inventoryValidator.updateStockSchema), inventoryController.updateStock);
 
 module.exports = {

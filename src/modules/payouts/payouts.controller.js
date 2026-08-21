@@ -5,11 +5,8 @@ const vendorFinanceService = require('../vendors/vendor-finance.service');
 const { recordAuditEntry } = require('../vendors/vendor-audit.service');
 
 const getMyPayouts = catchAsync(async (req, res) => {
-  const payouts = await prisma.payout.findMany({
-    where: { vendor_id: req.user.id },
-    orderBy: { created_at: 'desc' }
-  });
-  sendResponse(res, 200, { payouts }, 'Payouts fetched successfully');
+  const overview = await vendorFinanceService.getPayoutOverview(req.user.id);
+  sendResponse(res, 200, { payouts: overview.payouts, overview }, 'Payouts fetched successfully');
 });
 
 const triggerPayout = catchAsync(async (req, res) => {

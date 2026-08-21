@@ -14,6 +14,7 @@ const {
   assertStatusTransition,
 } = require('../../utils/telehealth.utils');
 const { notifyAppointmentBooked } = require('../../utils/telehealth.notifications');
+const inboxEvents = require('../notifications/inbox.events');
 const clinicalService = require('../clinical/clinical.service');
 const {
   mapPracticeLocation,
@@ -233,6 +234,19 @@ const bookAppointment = async (customerId, data) => {
   const normalizedSlot = normalizeSlotLabel(data.slot);
   const appointmentDateInput = data.appointment_date || new Date();
   const isInPerson = data.preferred_consultation_mode === 'in_person';
+  const isOnline = data.preferred_consultation_mode === 'online';
+
+  // Online video consults have no cash handoff — Stripe only
+  const paymentMethod = String(data.payment_method || '').toLowerCase();
+  if (isOnline && (paymentMethod === 'cod' || !paymentMethod)) {
+    throw new AppError(
+      'Online consultations require card payment. Cash is only available for in-clinic visits.',
+      400
+    );
+  }
+  if (isOnline && !['stripe', 'card', 'online'].includes(paymentMethod)) {
+    throw new AppError('Online consultations require Stripe payment', 400);
+  }
 
   const appointment = await prisma.$transaction(async (tx) => {
     const bookedSlots = await getBookedSlotsForDate(doctor.id, appointmentDateInput, tx);
@@ -326,6 +340,12 @@ const bookAppointment = async (customerId, data) => {
     console.error('clinical onAppointmentCreated failed', err.message);
   }
 
+  await inboxEvents.appointmentBooked({
+    appointment,
+    doctorName: doctor.name,
+    customerName: appointment.customer?.name,
+  });
+
   return appointment;
 };
 
@@ -350,11 +370,19 @@ const cancelAppointment = async (customerId, appointmentId) => {
   const appointment = await getCustomerAppointmentById(customerId, appointmentId);
   assertStatusTransition(appointment.status, 'cancelled');
 
-  return prisma.doctorAppointment.update({
+  const cancelled = await prisma.doctorAppointment.update({
     where: { id: appointmentId },
     data: { status: 'cancelled' },
     include: appointmentInclude,
   });
+
+  await inboxEvents.appointmentStatus({
+    appointment: cancelled,
+    status: 'cancelled',
+    doctorName: cancelled.doctor?.name,
+  });
+
+  return cancelled;
 };
 
 const updateAppointment = async (customerId, appointmentId, data) => {
@@ -374,7 +402,7 @@ const updateAppointment = async (customerId, appointmentId, data) => {
     throw new AppError('Selected slot is not available', 400);
   }
 
-  return prisma.doctorAppointment.update({
+  const updated = await prisma.doctorAppointment.update({
     where: { id: appointmentId },
     data: {
       slot,
@@ -383,6 +411,15 @@ const updateAppointment = async (customerId, appointmentId, data) => {
     },
     include: appointmentInclude,
   });
+
+  if (!sameSlot) {
+    await inboxEvents.appointmentRescheduled({
+      appointment: updated,
+      doctorName: updated.doctor?.name,
+    });
+  }
+
+  return updated;
 };
 
 const joinConsultation = async (customerId, appointmentId) => {

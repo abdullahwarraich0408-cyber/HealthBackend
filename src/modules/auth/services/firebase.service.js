@@ -179,6 +179,12 @@ async function verifyDirectGoogleToken(idToken) {
     const res = await fetch(`https://oauth2.googleapis.com/tokeninfo?id_token=${encodeURIComponent(idToken)}`);
     if (!res.ok) return null;
     const payload = await res.json();
+
+    const expectedClientId = process.env.GOOGLE_CLIENT_ID?.trim();
+    if (expectedClientId && payload.aud && payload.aud !== expectedClientId) {
+      return null;
+    }
+
     if (!payload?.sub || !payload?.email) return null;
     return {
       firebaseUid: `google_${payload.sub}`,
@@ -192,16 +198,52 @@ async function verifyDirectGoogleToken(idToken) {
   }
 }
 
-async function authenticateWithGoogleIdToken(idToken, meta, res) {
-  let profile = null;
+/**
+ * Exchange GIS popup authorization code for tokens.
+ * Popup ux_mode uses redirect_uri "postmessage".
+ */
+async function exchangeGoogleAuthCode(code) {
+  const clientId = process.env.GOOGLE_CLIENT_ID?.trim();
+  const clientSecret = process.env.GOOGLE_CLIENT_SECRET?.trim();
 
-  // 1. Try Firebase Admin verification
-  try {
-    const decoded = await verifyFirebaseIdToken(idToken);
-    profile = extractFirebaseProfile(decoded);
-  } catch {
-    // 2. Fallback to direct Google OAuth token verification
-    profile = await verifyDirectGoogleToken(idToken);
+  if (!clientId || !clientSecret) {
+    throw new AppError('Google OAuth is not configured on the server', 503);
+  }
+
+  const body = new URLSearchParams({
+    code,
+    client_id: clientId,
+    client_secret: clientSecret,
+    redirect_uri: 'postmessage',
+    grant_type: 'authorization_code',
+  });
+
+  const res = await fetch('https://oauth2.googleapis.com/token', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body,
+  });
+
+  const payload = await res.json().catch(() => ({}));
+  if (!res.ok || !payload?.id_token) {
+    const detail = payload?.error_description || payload?.error || 'token exchange failed';
+    throw new AppError(`Google sign-in failed: ${detail}`, 401);
+  }
+
+  return payload.id_token;
+}
+
+async function authenticateWithGoogleIdToken(idToken, meta, res) {
+  // Prefer direct Google OAuth verification (no Firebase required)
+  let profile = await verifyDirectGoogleToken(idToken);
+
+  if (!profile) {
+    try {
+      const decoded = await verifyFirebaseIdToken(idToken);
+      profile = extractFirebaseProfile(decoded);
+    } catch {
+      profile = null;
+    }
   }
 
   if (!profile || !profile.firebaseUid) {
@@ -224,6 +266,17 @@ async function authenticateWithGoogleIdToken(idToken, meta, res) {
   return issueSession(user, account, meta, res, { includeAccessToken: false });
 }
 
+async function authenticateWithGoogle({ idToken, code }, meta, res) {
+  let token = idToken;
+  if (!token && code) {
+    token = await exchangeGoogleAuthCode(code);
+  }
+  if (!token) {
+    throw new AppError('Google authorization code or id token is required', 400);
+  }
+  return authenticateWithGoogleIdToken(token, meta, res);
+}
+
 async function authenticateWithAppleIdToken(idToken, meta, res) {
   return authenticateWithFirebaseIdToken(idToken, meta, res);
 }
@@ -231,6 +284,7 @@ async function authenticateWithAppleIdToken(idToken, meta, res) {
 module.exports = {
   authenticateWithFirebaseIdToken,
   authenticateWithGoogleIdToken,
+  authenticateWithGoogle,
   authenticateWithAppleIdToken,
   extractFirebaseProfile,
   findUserByFirebaseIdentity,

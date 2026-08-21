@@ -21,7 +21,9 @@ async function registerDeviceToken(userId, { fcmToken, deviceId, platform }) {
     throw new AppError('FCM token and device ID are required', 400);
   }
 
-  const session = await prisma.userSession.findFirst({
+  const platformValue = platform || 'web';
+
+  let session = await prisma.userSession.findFirst({
     where: {
       user_id: userId,
       device_id: deviceId,
@@ -30,27 +32,44 @@ async function registerDeviceToken(userId, { fcmToken, deviceId, platform }) {
     orderBy: { created_at: 'desc' },
   });
 
+  // Web panels often share a login session with a different device_id — attach to latest session
+  if (!session) {
+    session = await prisma.userSession.findFirst({
+      where: {
+        user_id: userId,
+        expires_at: { gt: new Date() },
+      },
+      orderBy: { created_at: 'desc' },
+    });
+  }
+
   if (session) {
     await prisma.userSession.update({
       where: { id: session.id },
       data: {
         fcm_token: fcmToken,
-        platform: platform || session.platform,
+        platform: platformValue,
+        ...(deviceId ? { device_id: deviceId } : {}),
       },
     });
     return { registered: true, sessionId: session.id };
   }
 
-  await prisma.userSession.updateMany({
+  // No active session row — still store token on any historical session for this device
+  const updated = await prisma.userSession.updateMany({
     where: {
       user_id: userId,
-      device_id: deviceId,
+      OR: [{ device_id: deviceId }, { device_id: 'unknown' }],
     },
     data: {
       fcm_token: fcmToken,
-      platform: platform || 'android',
+      platform: platformValue,
     },
   });
+
+  if (!updated.count) {
+    throw new AppError('No active session found to attach push token. Please sign in again.', 400);
+  }
 
   return { registered: true };
 }

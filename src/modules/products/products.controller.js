@@ -4,7 +4,10 @@ const { sendResponse } = require('../../utils/response');
 
 const createProduct = catchAsync(async (req, res) => {
   const product = await productsService.createProduct(req.user.id, req.body);
-  sendResponse(res, 201, { product }, 'Product submitted successfully and is pending review');
+  const message = product.approval_status === 'draft'
+    ? 'Product saved as draft'
+    : 'Product submitted successfully and is pending review';
+  sendResponse(res, 201, { product }, message);
 });
 
 const getProducts = catchAsync(async (req, res) => {
@@ -24,7 +27,17 @@ const updateProduct = catchAsync(async (req, res) => {
 
 const deleteProduct = catchAsync(async (req, res) => {
   await productsService.deleteProduct(req.params.id, req.user.id);
-  sendResponse(res, 204, null, 'Product deleted successfully');
+  sendResponse(res, 200, { deleted: true }, 'Product archived successfully');
+});
+
+const duplicateProduct = catchAsync(async (req, res) => {
+  const product = await productsService.duplicateProduct(req.params.id, req.user.id);
+  sendResponse(res, 201, { product }, 'Product duplicated as draft');
+});
+
+const setListingStatus = catchAsync(async (req, res) => {
+  const product = await productsService.setListingStatus(req.params.id, req.user.id, req.body.listing_status);
+  sendResponse(res, 200, { product }, 'Product listing updated');
 });
 
 module.exports = {
@@ -32,5 +45,7 @@ module.exports = {
   getProducts,
   getProduct,
   updateProduct,
-  deleteProduct
+  deleteProduct,
+  duplicateProduct,
+  setListingStatus,
 };

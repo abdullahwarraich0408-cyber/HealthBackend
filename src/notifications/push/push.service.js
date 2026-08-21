@@ -41,6 +41,17 @@ async function sendPushToTokens(tokens, payload) {
         sound: 'default',
       },
     },
+    webpush: {
+      headers: { Urgency: 'high' },
+      notification: {
+        title: payload.title,
+        body: payload.body,
+        icon: '/favicon-32.png',
+      },
+      fcmOptions: {
+        link: String(payload.data?.link || '/'),
+      },
+    },
   });
 
   return {

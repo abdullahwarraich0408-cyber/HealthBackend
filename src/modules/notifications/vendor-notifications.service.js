@@ -1,5 +1,6 @@
 const prisma = require('../../config/database');
 const { notificationQueue } = require('../../queues');
+const inbox = require('./inbox.service');
 
 async function createVendorNotification({
   vendorId,
@@ -38,6 +39,16 @@ async function createVendorNotification({
     }
   }
 
+  await inbox.notify({
+    recipientType: 'vendor',
+    recipientId: vendorId,
+    type,
+    title,
+    message,
+    data,
+    link: data?.orderId ? '/vendor/orders' : '/vendor/dashboard',
+  });
+
   return notification;
 }
 
@@ -46,6 +57,13 @@ async function listVendorNotifications(vendorId) {
     where: { vendor_id: vendorId },
     orderBy: { created_at: 'desc' },
     take: 100,
+  });
+}
+
+async function markAllVendorNotificationsRead(vendorId) {
+  return prisma.vendorNotification.updateMany({
+    where: { vendor_id: vendorId, status: 'unread' },
+    data: { status: 'read', read_at: new Date() },
   });
 }
 
@@ -66,4 +84,5 @@ module.exports = {
   createVendorNotification,
   listVendorNotifications,
   markVendorNotificationRead,
+  markAllVendorNotificationsRead,
 };

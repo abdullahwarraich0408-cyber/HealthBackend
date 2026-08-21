@@ -8,6 +8,7 @@ const {
   isOnlineConsultation,
 } = require('../../utils/telehealth.utils');
 const { getIO } = require('../../config/socket');
+const inboxEvents = require('../notifications/inbox.events');
 
 const appointmentInclude = {
   doctor: { select: { id: true, name: true, specialty: true, photo_url: true } },
@@ -152,6 +153,14 @@ const sendMessage = async (user, appointmentId, payload) => {
     });
   } catch {
     // Socket may not be ready in tests
+  }
+
+  if (user.role !== 'system') {
+    await inboxEvents.chatMessage({
+      appointment: ctx.appointment,
+      senderRole: user.role === 'doctor' ? 'doctor' : 'customer',
+      preview: payload.message?.trim() || 'Sent an attachment',
+    });
   }
 
   return formatted;

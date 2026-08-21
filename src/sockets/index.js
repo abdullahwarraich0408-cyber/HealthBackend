@@ -11,8 +11,29 @@ const registerSockets = () => {
     io.use(socketAuth);
 
     io.on('connection', (socket) => {
-      socket.join(`${socket.user.role}-${socket.user.id}`);
-      logger.info(`Socket connected and joined personal room: ${socket.user.role}-${socket.user.id}`);
+      const role = socket.user?.role || 'customer';
+      const userId = socket.user?.id;
+      if (userId) {
+        socket.join(`${role}-${userId}`);
+        // Alias rooms so inbox emits always reach the client
+        if (role === 'customer' || role === 'user') {
+          socket.join(`customer-${userId}`);
+        }
+        if (role === 'doctor') {
+          socket.join(`doctor-${userId}`);
+        }
+        if (role === 'lab' || role === 'lab_partner') {
+          socket.join(`lab-${userId}`);
+          socket.join(`lab_partner-${userId}`);
+        }
+        if (role === 'vendor') {
+          socket.join(`vendor-${userId}`);
+        }
+      }
+      if (role === 'admin') {
+        socket.join('admins');
+      }
+      logger.info(`Socket connected and joined personal room: ${role}-${userId}`);
 
       handleOrderEvents(socket);
       handleTelehealthEvents(socket, io);

@@ -20,6 +20,7 @@ model Account {
   vendor       Vendor?
   doctor       Doctor?
   lab_partner  LabPartner?
+  vendor_staff VendorStaff?
 
   @@map("accounts")
 }
@@ -147,8 +148,24 @@ model Vendor {
   bank_account_title         String?
   bank_account_number        String?
   bank_name                  String?
+  iban                       String?
+  payout_schedule            String?  @default("weekly")
+  slug                       String?
+  phone                      String?
+  whatsapp                   String?
+  logo_url                   String?
   address                    String?
   city                       String?
+  province                   String?
+  postal_code                String?
+  legal_business_name        String?
+  owner_name                 String?
+  business_type              String?
+  license_expiry             DateTime?
+  pickup_enabled             Boolean  @default(true)
+  delivery_enabled           Boolean  @default(true)
+  min_order_amount           Float    @default(0)
+  preparation_time_minutes   Int      @default(30)
   latitude                   Float?
   longitude                  Float?
   service_radius_km          Float    @default(10.0)
@@ -187,6 +204,13 @@ model Vendor {
   current_prescription_orders   PrescriptionOrder[] @relation("CurrentVendor")
   assigned_prescription_orders  PrescriptionOrder[] @relation("AssignedVendor")
   prescription_assignments      PrescriptionAssignmentLog[]
+  staff                         VendorStaff[]
+  product_inventories           ProductInventory[]
+  inventory_batches             InventoryBatch[]
+  inventory_transactions        InventoryTransaction[]
+  order_events                  OrderEvent[]
+  login_activities              VendorLoginActivity[]
+  prescription_reviews          PrescriptionReview[]
 
   @@index([status])
   @@index([city])
@@ -198,12 +222,33 @@ model Product {
   id          String   @id @default(uuid())
   vendor_id   String
   name        String
+  slug        String?
   formula     String?
+  generic_name String?
+  brand_name  String?
+  manufacturer String?
   description String?
+  usage_instructions String?
+  warnings    String?
+  side_effects String?
+  contraindications String?
   price       Float
+  retail_price Float?
+  sale_price  Float?
+  cost_price  Float?
   stock       Int      @default(0)
   image_url   String?
   category    String?
+  subcategory String?
+  dosage_form String?
+  strength    String?
+  pack_size   String?
+  sku         String?
+  barcode     String?
+  prescription_required Boolean @default(false)
+  controlled_medicine Boolean @default(false)
+  listing_status String @default("ACTIVE")
+  low_stock_threshold Int @default(10)
   approval_status String   @default("pending_review")
   review_note     String?
   approved_at     DateTime?
@@ -211,6 +256,7 @@ model Product {
   reviewed_by_account_id String?
   created_at  DateTime @default(now())
   updated_at  DateTime @updatedAt
+  deleted_at  DateTime?
 
   vendor      Vendor   @relation(fields: [vendor_id], references: [id])
   order_items OrderItem[]
@@ -219,8 +265,14 @@ model Product {
   prescription_order_items PrescriptionOrderItem[]
   offers      Offer[]
   inventory_reservations InventoryReservation[]
+  inventory   ProductInventory?
+  batches     InventoryBatch[]
+  inventory_transactions InventoryTransaction[]
 
   @@index([vendor_id, approval_status])
+  @@index([vendor_id, listing_status])
+  @@index([vendor_id, sku])
+  @@index([barcode])
   @@map("products")
 }
 
@@ -229,10 +281,32 @@ model Order {
   customer_id           String
   vendor_id             String
   checkout_session_id   String?
+  order_number          String?  @unique
   total_amount          Float
-  status                String   @default("pending") // pending, processing, shipped, delivered, cancelled
+  status                String   @default("pending")
+  payment_status        String   @default("unpaid")
+  delivery_method       String   @default("delivery")
+  subtotal              Float?
+  discount_amount       Float    @default(0)
+  delivery_fee          Float    @default(0)
+  platform_fee          Float    @default(0)
+  commission_amount     Float    @default(0)
+  vendor_net            Float?
+  refund_amount         Float    @default(0)
   requires_prescription Boolean  @default(false)
   delivery_address      Json
+  rejection_reason      String?
+  cancelled_by          String?
+  cancelled_at          DateTime?
+  cancellation_reason   String?
+  accepted_at           DateTime?
+  preparing_at          DateTime?
+  ready_at              DateTime?
+  out_for_delivery_at   DateTime?
+  delivered_at          DateTime?
+  completed_at          DateTime?
+  rider_name            String?
+  tracking_code         String?
   created_at            DateTime @default(now())
   updated_at            DateTime @updatedAt
 
@@ -245,7 +319,11 @@ model Order {
   return_requests       ReturnRequest[]
   vendor_transactions   VendorTransaction[]
   inventory_reservations InventoryReservation[]
+  events                OrderEvent[]
 
+  @@index([vendor_id, status])
+  @@index([vendor_id, created_at])
+  @@index([order_number])
   @@map("orders")
 }
 
@@ -308,14 +386,24 @@ model Commission {
 model Payout {
   id                String   @id @default(uuid())
   vendor_id         String
+  payout_number     String?
   amount            Float
-  status            String   @default("pending") // pending, processing, completed, failed
+  gross_amount      Float?
+  fees              Float    @default(0)
+  refunds           Float    @default(0)
+  adjustments       Float    @default(0)
+  net_amount        Float?
+  status            String   @default("pending")
+  method            String?
+  period_start      DateTime?
+  period_end        DateTime?
   payout_date       DateTime?
   gateway_reference String?
   created_at        DateTime @default(now())
 
   vendor            Vendor   @relation(fields: [vendor_id], references: [id])
 
+  @@index([vendor_id, created_at])
   @@map("payouts")
 }
 
@@ -338,33 +426,49 @@ model Prescription {
 }
 
 model PrescriptionOrder {
-  id                  String   @id @default(uuid())
-  customer_id         String
-  file_url            String
-  delivery_address    Json
-  delivery_type       String   @default("standard") // express, standard
-  status              String   @default("finding_vendor")
-  estimated_value     Float    @default(0)
-  current_vendor_id   String?
-  assigned_vendor_id  String?
-  accept_deadline     DateTime?
-  rejected_vendor_ids Json     @default("[]")
-  assignment_attempts Int      @default(0)
-  stock_status        String?
-  customer_confirmed  Boolean  @default(false)
-  distance_km         Float?
-  eta_minutes         Int?
-  medicine_count      Int      @default(0)
-  created_at          DateTime @default(now())
-  updated_at          DateTime @updatedAt
+  id                     String    @id @default(uuid())
+  customer_id            String
+  file_url               String
+  delivery_address       Json
+  delivery_type          String    @default("standard") // express, standard
+  /// Fulfillment lifecycle (separate from payment_status)
+  status                 String    @default("finding_vendor")
+  payment_status         String    @default("not_required") // not_required|pending|processing|paid|failed|refunded|partially_refunded
+  payment_method         String?   // stripe|cod
+  estimated_value        Float     @default(0)
+  total_amount           Float     @default(0)
+  delivery_fee           Float     @default(0)
+  quotation_locked_at    DateTime?
+  quotation_expires_at   DateTime?
+  quotation_version      Int       @default(0)
+  paid_at                DateTime?
+  cancellation_reason    String?
+  current_vendor_id      String?
+  assigned_vendor_id     String?
+  accept_deadline        DateTime?
+  rejected_vendor_ids    Json      @default("[]")
+  assignment_attempts    Int       @default(0)
+  stock_status           String?
+  customer_confirmed     Boolean   @default(false)
+  distance_km            Float?
+  eta_minutes            Int?
+  medicine_count         Int       @default(0)
+  stripe_session_id      String?
+  created_at             DateTime  @default(now())
+  updated_at             DateTime  @updatedAt
 
-  customer            User     @relation(fields: [customer_id], references: [id])
-  current_vendor      Vendor?  @relation("CurrentVendor", fields: [current_vendor_id], references: [id])
-  assigned_vendor     Vendor?  @relation("AssignedVendor", fields: [assigned_vendor_id], references: [id])
-  items               PrescriptionOrderItem[]
-  assignment_logs     PrescriptionAssignmentLog[]
-  vendor_transactions VendorTransaction[]
+  customer               User      @relation(fields: [customer_id], references: [id])
+  current_vendor         Vendor?   @relation("CurrentVendor", fields: [current_vendor_id], references: [id])
+  assigned_vendor        Vendor?   @relation("AssignedVendor", fields: [assigned_vendor_id], references: [id])
+  items                  PrescriptionOrderItem[]
+  assignment_logs        PrescriptionAssignmentLog[]
+  vendor_transactions    VendorTransaction[]
+  reviews                PrescriptionReview[]
 
+  @@index([current_vendor_id, status])
+  @@index([assigned_vendor_id, status])
+  @@index([status, payment_status])
+  @@index([quotation_expires_at])
   @@map("prescription_orders")
 }
 
@@ -374,8 +478,10 @@ model PrescriptionOrderItem {
   name                  String
   quantity              Int      @default(1)
   unit_price            Float    @default(0)
-  availability          String   @default("pending") // pending, available, unavailable
+  availability          String   @default("pending")
   product_id            String?
+  decision              String?
+  matched_quantity      Int?
 
   prescription_order    PrescriptionOrder @relation(fields: [prescription_order_id], references: [id], onDelete: Cascade)
   product               Product?          @relation(fields: [product_id], references: [id])
@@ -716,15 +822,17 @@ model ReturnRequest {
   order_id      String
   customer_id   String
   reason        String
-  status        String   @default("pending") // pending, approved, rejected, processed
+  status        String   @default("pending")
   refund_amount Float?
   notes         String?
+  items         Json?
   created_at    DateTime @default(now())
   updated_at    DateTime @updatedAt
 
   order         Order    @relation(fields: [order_id], references: [id])
   customer      User     @relation(fields: [customer_id], references: [id])
 
+  @@index([status, created_at])
   @@map("return_requests")
 }
 
@@ -1518,4 +1626,195 @@ model SiteSetting {
   updated_at DateTime @updatedAt
 
   @@map("site_settings")
+}
+
+model InboxNotification {
+  id             String    @id @default(uuid())
+  recipient_type String
+  recipient_id   String
+  type           String
+  title          String
+  message        String
+  link           String?
+  data           Json?
+  is_read        Boolean   @default(false)
+  created_at     DateTime  @default(now())
+  read_at        DateTime?
+
+  @@index([recipient_type, recipient_id, is_read, created_at])
+  @@index([created_at])
+  @@map("inbox_notifications")
+}
+
+model ContactInquiry {
+  id         String   @id @default(uuid())
+  first_name String
+  last_name  String   @default("")
+  email      String
+  phone      String?
+  type       String   @default("general")
+  subject    String   @default("")
+  message    String
+  status     String   @default("new")
+  user_id    String?
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  @@index([status, created_at])
+  @@index([email])
+  @@map("contact_inquiries")
+}
+
+model MedicineCategory {
+  id         String   @id @default(uuid())
+  name       String   @unique
+  slug       String   @unique
+  parent_id  String?
+  is_active  Boolean  @default(true)
+  sort_order Int      @default(0)
+
+  parent     MedicineCategory?  @relation("CategoryTree", fields: [parent_id], references: [id])
+  children   MedicineCategory[] @relation("CategoryTree")
+
+  @@map("medicine_categories")
+}
+
+model ProductInventory {
+  id                 String   @id @default(uuid())
+  vendor_id          String
+  product_id         String   @unique
+  available_quantity Int      @default(0)
+  reserved_quantity  Int      @default(0)
+  sold_quantity      Int      @default(0)
+  damaged_quantity   Int      @default(0)
+  expired_quantity   Int      @default(0)
+  updated_at         DateTime @updatedAt
+
+  vendor             Vendor   @relation(fields: [vendor_id], references: [id], onDelete: Cascade)
+  product            Product  @relation(fields: [product_id], references: [id], onDelete: Cascade)
+
+  @@index([vendor_id])
+  @@map("inventory")
+}
+
+model InventoryBatch {
+  id                 String   @id @default(uuid())
+  vendor_id          String
+  product_id         String
+  batch_number       String
+  manufacturing_date DateTime?
+  expiry_date        DateTime?
+  purchase_price     Float?
+  quantity_received  Int      @default(0)
+  quantity_available Int      @default(0)
+  supplier_name      String?
+  created_at         DateTime @default(now())
+  updated_at         DateTime @updatedAt
+
+  vendor             Vendor   @relation(fields: [vendor_id], references: [id], onDelete: Cascade)
+  product            Product  @relation(fields: [product_id], references: [id], onDelete: Cascade)
+  transactions       InventoryTransaction[]
+
+  @@index([vendor_id, product_id])
+  @@index([product_id, expiry_date])
+  @@unique([vendor_id, product_id, batch_number])
+  @@map("inventory_batches")
+}
+
+model InventoryTransaction {
+  id             String   @id @default(uuid())
+  vendor_id      String
+  product_id     String
+  batch_id       String?
+  type           String
+  quantity       Int
+  reference_type String?
+  reference_id   String?
+  reason         String?
+  performed_by   String?
+  created_at     DateTime @default(now())
+
+  vendor         Vendor   @relation(fields: [vendor_id], references: [id], onDelete: Cascade)
+  product        Product  @relation(fields: [product_id], references: [id], onDelete: Cascade)
+  batch          InventoryBatch? @relation(fields: [batch_id], references: [id])
+
+  @@index([vendor_id, created_at])
+  @@index([product_id, created_at])
+  @@map("inventory_transactions")
+}
+
+model OrderEvent {
+  id         String   @id @default(uuid())
+  vendor_id  String
+  order_id   String
+  status     String
+  note       String?
+  actor_id   String?
+  actor_type String?
+  created_at DateTime @default(now())
+
+  vendor     Vendor   @relation(fields: [vendor_id], references: [id], onDelete: Cascade)
+  order      Order    @relation(fields: [order_id], references: [id], onDelete: Cascade)
+
+  @@index([order_id, created_at])
+  @@map("order_events")
+}
+
+model VendorStaff {
+  id           String    @id @default(uuid())
+  vendor_id    String
+  account_id   String?   @unique
+  name         String
+  email        String
+  role         String    @default("VIEWER")
+  status       String    @default("invited")
+  invited_at   DateTime  @default(now())
+  accepted_at  DateTime?
+  last_login_at DateTime?
+  created_at   DateTime  @default(now())
+  updated_at   DateTime  @updatedAt
+
+  vendor       Vendor    @relation(fields: [vendor_id], references: [id], onDelete: Cascade)
+  account      Account?  @relation(fields: [account_id], references: [id])
+
+  @@unique([vendor_id, email])
+  @@index([vendor_id, status])
+  @@map("vendor_staff")
+}
+
+model VendorLoginActivity {
+  id         String   @id @default(uuid())
+  vendor_id  String
+  account_id String?
+  staff_id   String?
+  ip_address String?
+  user_agent String?
+  success    Boolean  @default(true)
+  created_at DateTime @default(now())
+
+  vendor     Vendor   @relation(fields: [vendor_id], references: [id], onDelete: Cascade)
+
+  @@index([vendor_id, created_at])
+  @@map("vendor_login_activities")
+}
+
+model PrescriptionReview {
+  id               String    @id @default(uuid())
+  vendor_id        String
+  prescription_id  String
+  status           String
+  reviewed_by      String?
+  reviewed_at      DateTime?
+  decision         String?
+  notes            String?
+  rejection_reason String?
+  created_at       DateTime  @default(now())
+  updated_at       DateTime  @updatedAt
+
+  vendor           Vendor            @relation(fields: [vendor_id], references: [id], onDelete: Cascade)
+  prescription     PrescriptionOrder @relation(fields: [prescription_id], references: [id], onDelete: Cascade)
+
+  @@index([vendor_id, status])
+  @@index([prescription_id])
+  @@map("prescription_reviews")
 }

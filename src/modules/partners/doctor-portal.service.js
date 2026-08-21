@@ -11,6 +11,7 @@ const {
   notifyAppointmentConfirmed,
   notifyAppointmentCompleted,
 } = require('../../utils/telehealth.notifications');
+const inboxEvents = require('../notifications/inbox.events');
 const {
   createChatForAppointment,
   extendChatAfterCompletion,
@@ -160,6 +161,12 @@ const updateAppointmentStatus = async (doctorId, appointmentId, status, notes) =
       appointment: updated,
     });
 
+    await inboxEvents.appointmentStatus({
+      appointment: updated,
+      status: 'confirmed',
+      doctorName: updated.doctor?.name,
+    });
+
     emitOrderUpdated({
       orderId: updated.id,
       status: updated.status,
@@ -207,6 +214,20 @@ const updateAppointmentStatus = async (doctorId, appointmentId, status, notes) =
     await notifyAppointmentCompleted({
       patientEmail: appointment.customer?.email,
       appointment: updated,
+    });
+
+    await inboxEvents.appointmentStatus({
+      appointment: updated,
+      status: 'completed',
+      doctorName: updated.doctor?.name,
+    });
+  }
+
+  if (status === 'cancelled' || status === 'rejected' || status === 'no_show') {
+    await inboxEvents.appointmentStatus({
+      appointment: updated,
+      status,
+      doctorName: updated.doctor?.name,
     });
   }
 

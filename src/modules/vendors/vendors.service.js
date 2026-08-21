@@ -86,26 +86,67 @@ function mapDocumentSummary(documents = []) {
   }));
 }
 
+function maskAccountNumber(value) {
+  const raw = String(value || '');
+  if (raw.length < 4) return raw ? '••••' : null;
+  return `${raw.slice(0, 2)}••••••${raw.slice(-4)}`;
+}
+
+function mapLifecycleStatus(status) {
+  const raw = String(status || 'pending').toLowerCase();
+  if (['approved', 'active'].includes(raw)) return 'ACTIVE';
+  if (raw === 'under_review') return 'UNDER_REVIEW';
+  if (raw === 'suspended') return 'SUSPENDED';
+  if (raw === 'rejected') return 'REJECTED';
+  return 'PENDING';
+}
+
 function mapVendorProfile(vendor) {
   if (!vendor) return null;
 
   const availability = computeVendorAvailability(vendor);
+  const lifecycle = mapLifecycleStatus(vendor.status);
+  const expiringDocs = (vendor.documents || []).filter((document) => {
+    if (!document.expires_at) return false;
+    const days = (new Date(document.expires_at) - Date.now()) / (1000 * 60 * 60 * 24);
+    return days <= 30;
+  });
 
   return {
     id: vendor.id,
     email: vendor.account?.email || vendor.email,
     business_name: vendor.business_name,
     license_number: vendor.license_number,
+    license_expiry: vendor.license_expiry || null,
     status: vendor.status,
+    lifecycle_status: lifecycle,
+    selling_allowed: ACTIVE_VENDOR_STATUSES.includes(vendor.status),
     commission_rate: vendor.commission_rate,
     trade_license_url: vendor.trade_license_url,
     pharmacist_certificate_url: vendor.pharmacist_certificate_url,
     ntn: vendor.ntn,
     bank_account_title: vendor.bank_account_title,
     bank_account_number: vendor.bank_account_number,
+    bank_account_number_masked: maskAccountNumber(vendor.bank_account_number || vendor.iban),
     bank_name: vendor.bank_name,
+    iban: vendor.iban,
+    iban_masked: maskAccountNumber(vendor.iban),
+    payout_schedule: vendor.payout_schedule,
+    slug: vendor.slug,
+    phone: vendor.phone,
+    whatsapp: vendor.whatsapp,
+    logo_url: vendor.logo_url,
     address: vendor.address,
     city: vendor.city,
+    province: vendor.province,
+    postal_code: vendor.postal_code,
+    legal_business_name: vendor.legal_business_name,
+    owner_name: vendor.owner_name,
+    business_type: vendor.business_type,
+    pickup_enabled: vendor.pickup_enabled,
+    delivery_enabled: vendor.delivery_enabled,
+    min_order_amount: vendor.min_order_amount,
+    preparation_time_minutes: vendor.preparation_time_minutes,
     latitude: vendor.latitude,
     longitude: vendor.longitude,
     service_radius_km: vendor.service_radius_km,
@@ -116,12 +157,26 @@ function mapVendorProfile(vendor) {
     holiday_ends_at: vendor.holiday_ends_at,
     holiday_reason: vendor.holiday_reason,
     manual_online_override: vendor.manual_online_override,
+    notification_preferences: vendor.notification_preferences || {},
     onboarding_submitted_at: vendor.onboarding_submitted_at,
     approved_at: vendor.approved_at,
     availability,
     documents: mapDocumentSummary(vendor.documents || []),
     operating_hours: vendor.operating_hours || [],
     service_areas: vendor.service_areas || [],
+    compliance_alerts: [
+      ...(lifecycle !== 'ACTIVE'
+        ? [
+            lifecycle === 'SUSPENDED'
+              ? 'Your selling privileges are temporarily suspended. Contact Medzoos support.'
+              : 'Your pharmacy account is under verification.',
+          ]
+        : []),
+      ...(expiringDocs.length ? ['License or compliance document expires within 30 days'] : []),
+      ...((vendor.documents || []).some((document) => document.status === 'rejected')
+        ? ['Compliance document rejected']
+        : []),
+    ],
     created_at: vendor.created_at,
     updated_at: vendor.updated_at,
   };
@@ -188,6 +243,9 @@ async function registerVendor(data) {
     },
   });
 
+  const inboxEvents = require('../notifications/inbox.events');
+  await inboxEvents.partnerApplication(vendor);
+
   return getVendorProfile(vendor.id);
 }
 
@@ -243,6 +301,24 @@ async function updateVendorProfile(vendorId, data) {
   if (data.bank_account_title !== undefined) updateData.bank_account_title = data.bank_account_title || null;
   if (data.bank_account_number !== undefined) updateData.bank_account_number = data.bank_account_number || null;
   if (data.bank_name !== undefined) updateData.bank_name = data.bank_name || null;
+  if (data.iban !== undefined) updateData.iban = data.iban || null;
+  if (data.payout_schedule !== undefined) updateData.payout_schedule = data.payout_schedule || null;
+  if (data.phone !== undefined) updateData.phone = data.phone || null;
+  if (data.whatsapp !== undefined) updateData.whatsapp = data.whatsapp || null;
+  if (data.logo_url !== undefined) updateData.logo_url = data.logo_url || null;
+  if (data.province !== undefined) updateData.province = data.province || null;
+  if (data.postal_code !== undefined) updateData.postal_code = data.postal_code || null;
+  if (data.legal_business_name !== undefined) updateData.legal_business_name = data.legal_business_name || null;
+  if (data.owner_name !== undefined) updateData.owner_name = data.owner_name || null;
+  if (data.business_type !== undefined) updateData.business_type = data.business_type || null;
+  if (data.license_expiry !== undefined) updateData.license_expiry = data.license_expiry ? new Date(data.license_expiry) : null;
+  if (data.pickup_enabled !== undefined) updateData.pickup_enabled = Boolean(data.pickup_enabled);
+  if (data.delivery_enabled !== undefined) updateData.delivery_enabled = Boolean(data.delivery_enabled);
+  if (data.min_order_amount !== undefined) updateData.min_order_amount = sanitizeNumber(data.min_order_amount, 0);
+  if (data.preparation_time_minutes !== undefined) {
+    updateData.preparation_time_minutes = sanitizeNumber(data.preparation_time_minutes, 30);
+  }
+  if (data.notification_preferences !== undefined) updateData.notification_preferences = data.notification_preferences;
   if (data.address !== undefined) updateData.address = data.address || null;
   if (data.city !== undefined) updateData.city = data.city || null;
   if (data.latitude !== undefined) updateData.latitude = sanitizeNumber(data.latitude);
@@ -345,28 +421,55 @@ async function getVendors(query) {
     }));
 }
 
-async function getMyProducts(vendorId) {
-  return prisma.product.findMany({
-    where: { vendor_id: vendorId },
-    orderBy: { name: 'asc' },
-  });
+async function getMyProducts(vendorId, query = {}) {
+  const productsService = require('../products/products.service');
+  return productsService.listVendorProducts(vendorId, query);
+}
+
+function percentDelta(current, previous) {
+  if (!previous) return null;
+  return Math.round(((current - previous) / Math.abs(previous)) * 100);
+}
+
+function formatDuration(minutes) {
+  const value = Math.max(0, Number(minutes) || 0);
+  if (value < 60) return `${value} min`;
+  const hours = Math.floor(value / 60);
+  const rest = value % 60;
+  return rest ? `${hours} hr ${rest} min` : `${hours} hr`;
 }
 
 async function getDashboardStats(vendorId) {
-  const [orders, products, prescriptionOrders, assignmentLogs, notifications, operatingHours, vendorCore] =
+  const startOfToday = new Date();
+  startOfToday.setHours(0, 0, 0, 0);
+  const startOfYesterday = new Date(startOfToday);
+  startOfYesterday.setDate(startOfYesterday.getDate() - 1);
+  const startOfMonth = new Date(startOfToday.getFullYear(), startOfToday.getMonth(), 1);
+  const startOfLastMonth = new Date(startOfToday.getFullYear(), startOfToday.getMonth() - 1, 1);
+  const endOfLastMonth = new Date(startOfMonth.getTime() - 1);
+
+  const validRevenueStatuses = ['pending', 'processing', 'shipped', 'delivered', 'NEW', 'ACCEPTED', 'PREPARING', 'READY_FOR_PICKUP', 'OUT_FOR_DELIVERY', 'DELIVERED', 'COMPLETED'];
+
+  const [orders, products, prescriptionOrders, assignmentLogs, notifications, operatingHours, vendorCore, earnings, expiringBatches] =
     await Promise.all([
       prisma.order.findMany({
         where: { vendor_id: vendorId },
         include: {
-          items: { include: { product: { select: { id: true, name: true, price: true } } } },
-          customer: { select: { name: true } },
+          items: { include: { product: { select: { id: true, name: true, price: true, category: true } } } },
+          customer: { select: { name: true, phone: true } },
         },
         orderBy: { created_at: 'desc' },
       }),
-      prisma.product.findMany({ where: { vendor_id: vendorId } }),
+      prisma.product.findMany({
+        where: { vendor_id: vendorId, deleted_at: null },
+        include: { inventory: true, batches: true },
+      }),
       prisma.prescriptionOrder.findMany({
-        where: { assigned_vendor_id: vendorId },
-        orderBy: { created_at: 'desc' },
+        where: {
+          OR: [{ assigned_vendor_id: vendorId }, { current_vendor_id: vendorId }],
+        },
+        include: { customer: { select: { name: true } }, items: true },
+        orderBy: { created_at: 'asc' },
       }),
       prisma.prescriptionAssignmentLog.findMany({
         where: { vendor_id: vendorId },
@@ -381,27 +484,47 @@ async function getDashboardStats(vendorId) {
       }),
       prisma.vendor.findUnique({
         where: { id: vendorId },
-        select: {
-          status: true,
-          is_open: true,
-          is_online: true,
-          holiday_mode_enabled: true,
-          holiday_starts_at: true,
-          holiday_ends_at: true,
-          manual_online_override: true,
+        include: { documents: true },
+      }),
+      getVendorEarningsSummary(vendorId),
+      prisma.inventoryBatch.findMany({
+        where: {
+          vendor_id: vendorId,
+          expiry_date: { lte: new Date(Date.now() + 90 * 24 * 60 * 60 * 1000) },
         },
+        include: { product: { select: { name: true } } },
+        orderBy: { expiry_date: 'asc' },
+        take: 8,
       }),
     ]);
 
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
+  const revenueOrders = orders.filter((order) => validRevenueStatuses.includes(order.status));
+  const totalRevenue = revenueOrders.reduce((sum, order) => sum + Number(order.total_amount || 0), 0);
+  const lastMonthRevenue = revenueOrders
+    .filter((order) => {
+      const created = new Date(order.created_at);
+      return created >= startOfLastMonth && created <= endOfLastMonth;
+    })
+    .reduce((sum, order) => sum + Number(order.total_amount || 0), 0);
+  const thisMonthRevenue = revenueOrders
+    .filter((order) => new Date(order.created_at) >= startOfMonth)
+    .reduce((sum, order) => sum + Number(order.total_amount || 0), 0);
 
-  const totalRevenue = orders.reduce((sum, order) => sum + Number(order.total_amount || 0), 0);
-  const ordersToday = orders.filter((order) => new Date(order.created_at) >= today).length;
-  const activeProducts = products.length;
-  const lowStock = products.filter((product) => product.stock <= 10).length;
-  const stockAvailabilityPercent =
-    activeProducts === 0 ? 100 : Math.round(((activeProducts - lowStock) / activeProducts) * 100);
+  const ordersToday = orders.filter((order) => new Date(order.created_at) >= startOfToday).length;
+  const ordersYesterday = orders.filter((order) => {
+    const created = new Date(order.created_at);
+    return created >= startOfYesterday && created < startOfToday;
+  }).length;
+
+  const activeProducts = products.filter(
+    (product) =>
+      product.approval_status === 'approved' &&
+      String(product.listing_status || 'ACTIVE').toUpperCase() === 'ACTIVE'
+  ).length;
+  const lowStockList = products.filter((product) => {
+    const available = product.inventory?.available_quantity ?? product.stock;
+    return available <= Number(product.low_stock_threshold ?? 10);
+  });
 
   const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
   const monthlyMap = {};
@@ -412,7 +535,7 @@ async function getDashboardStats(vendorId) {
     monthlyMap[key] = { name: monthNames[date.getMonth()], revenue: 0, orders: 0 };
   }
 
-  for (const order of orders) {
+  for (const order of revenueOrders) {
     const created = new Date(order.created_at);
     const key = `${created.getFullYear()}-${created.getMonth()}`;
     if (monthlyMap[key]) {
@@ -422,31 +545,31 @@ async function getDashboardStats(vendorId) {
   }
 
   const productSales = {};
-  for (const order of orders) {
+  const categorySales = {};
+  for (const order of revenueOrders) {
     for (const item of order.items || []) {
       const name = item.product?.name || 'Unknown';
-      if (!productSales[name]) {
-        productSales[name] = { name, sales: 0, revenue: 0 };
-      }
+      if (!productSales[name]) productSales[name] = { name, sales: 0, revenue: 0 };
       productSales[name].sales += item.quantity;
       productSales[name].revenue += Number(item.unit_price || 0) * item.quantity;
+      const category = item.product?.category || 'Other';
+      categorySales[category] = (categorySales[category] || 0) + Number(item.unit_price || 0) * item.quantity;
     }
   }
 
   const topProducts = Object.values(productSales)
     .sort((a, b) => b.sales - a.sales)
     .slice(0, 5)
-    .map((product, index) => ({
-      ...product,
-      rank: index + 1,
-    }));
+    .map((product, index) => ({ ...product, rank: index + 1 }));
 
-  const pendingOrders = orders.filter((order) => order.status === 'pending').length;
-  const processingOrders = orders.filter((order) => ['processing', 'shipped'].includes(order.status)).length;
-  const completedToday = orders.filter(
-    (order) => order.status === 'delivered' && new Date(order.updated_at) >= today
+  const pendingOrders = orders.filter((order) => ['pending', 'NEW'].includes(order.status)).length;
+  const processingOrders = orders.filter((order) =>
+    ['processing', 'shipped', 'ACCEPTED', 'PREPARING', 'READY_FOR_PICKUP', 'OUT_FOR_DELIVERY'].includes(order.status)
   ).length;
-  const cancelledOrders = orders.filter((order) => order.status === 'cancelled').length;
+  const completedToday = orders.filter(
+    (order) => ['delivered', 'DELIVERED', 'COMPLETED'].includes(order.status) && new Date(order.updated_at) >= startOfToday
+  ).length;
+  const cancelledOrders = orders.filter((order) => ['cancelled', 'CANCELLED', 'REJECTED'].includes(order.status)).length;
 
   const responseMap = {};
   for (const log of assignmentLogs) {
@@ -460,7 +583,6 @@ async function getDashboardStats(vendorId) {
       responseMap[log.prescription_order_id].responded = new Date(log.created_at);
     }
   }
-
   const responseTimes = Object.values(responseMap)
     .filter((entry) => entry.offered && entry.responded)
     .map((entry) => Math.round((entry.responded - entry.offered) / 60000));
@@ -476,22 +598,61 @@ async function getDashboardStats(vendorId) {
     ? Math.round((acceptedAssignments / actionableAssignments) * 100)
     : 0;
 
+  const revenueDelta = percentDelta(thisMonthRevenue || totalRevenue, lastMonthRevenue);
+  const ordersDelta = percentDelta(ordersToday, ordersYesterday);
+
   return {
     totalRevenue,
     ordersToday,
     activeProducts,
-    lowStock,
+    lowStock: lowStockList.length,
     unreadNotifications: notifications,
     totalOrders: orders.length,
+    comparisons: {
+      totalRevenue: revenueDelta == null ? 'after fees' : `${revenueDelta >= 0 ? '↑' : '↓'} ${Math.abs(revenueDelta)}% vs last month`,
+      totalRevenuePositive: revenueDelta == null ? true : revenueDelta >= 0,
+      ordersToday: ordersDelta == null ? `${ordersToday} today` : `${ordersDelta >= 0 ? '↑' : '↓'} ${Math.abs(ordersDelta)}% vs yesterday`,
+      ordersTodayPositive: ordersDelta == null ? true : ordersDelta >= 0,
+      activeProducts: `${activeProducts} listed`,
+      lowStock: `${lowStockList.length} low stock`,
+      rxAcceptance: `${prescriptionAcceptanceRate}% accepted`,
+      avgResponse: `${formatDuration(averageResponseMinutes)} avg`,
+      netEarnings: 'after fees',
+    },
     monthlyPerformance: Object.values(monthlyMap),
+    categorySales: Object.entries(categorySales).map(([name, value]) => ({ name, value })),
     topProducts,
     recentOrders: orders.slice(0, 5).map((order) => ({
       id: order.id,
+      order_number: order.order_number || `MZ-${String(order.id).slice(0, 8).toUpperCase()}`,
       customer: order.customer?.name || 'Customer',
       items: order.items?.length || 0,
       status: order.status,
       amount: order.total_amount,
+      created_at: order.created_at,
     })),
+    lowStockAlerts: lowStockList.slice(0, 6).map((product) => ({
+      id: product.id,
+      name: product.name,
+      stock: product.inventory?.available_quantity ?? product.stock,
+      threshold: product.low_stock_threshold,
+    })),
+    expiringSoon: expiringBatches.map((batch) => ({
+      id: batch.id,
+      product: batch.product?.name,
+      expiry_date: batch.expiry_date,
+      quantity: batch.quantity_available,
+    })),
+    prescriptionQueue: prescriptionOrders
+      .filter((order) => ['finding_vendor', 'awaiting_accept', 'stock_check', 'PENDING_REVIEW', 'UNDER_REVIEW'].includes(order.status) || order.current_vendor_id === vendorId)
+      .slice(0, 5)
+      .map((order) => ({
+        id: order.id,
+        patient: order.customer?.name || 'Patient',
+        items: order.items?.length || order.medicine_count || 0,
+        status: order.status,
+        created_at: order.created_at,
+      })),
     orderSummary: {
       pending: pendingOrders,
       outForDelivery: processingOrders,
@@ -502,19 +663,15 @@ async function getDashboardStats(vendorId) {
       prescriptionAssignments: assignmentLogs.filter((log) => log.action === 'offered').length,
       prescriptionAcceptanceRate,
       averageResponseMinutes,
-      stockAvailabilityPercent,
+      averageResponseLabel: formatDuration(averageResponseMinutes),
       completedPrescriptionOrders: prescriptionOrders.filter((order) => order.status === 'delivered').length,
     },
     availability: computeVendorAvailability({
-      status: vendorCore?.status,
-      is_open: vendorCore?.is_open,
-      is_online: vendorCore?.is_online,
-      holiday_mode_enabled: vendorCore?.holiday_mode_enabled,
-      holiday_starts_at: vendorCore?.holiday_starts_at,
-      holiday_ends_at: vendorCore?.holiday_ends_at,
-      manual_online_override: vendorCore?.manual_online_override,
+      ...vendorCore,
       operating_hours: operatingHours,
     }),
+    earnings: earnings.totals,
+    compliance_alerts: mapVendorProfile(vendorCore)?.compliance_alerts || [],
   };
 }
 

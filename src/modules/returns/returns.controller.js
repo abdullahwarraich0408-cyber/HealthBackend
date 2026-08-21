@@ -18,6 +18,16 @@ const updateReturnStatus = catchAsync(async (req, res) => {
   sendResponse(res, 200, { returnRequest }, `Return request status updated to ${req.body.status}`);
 });
 
+const getVendorReturns = catchAsync(async (req, res) => {
+  const returns = await returnsService.getVendorReturns(req.user.id);
+  sendResponse(res, 200, { returns }, 'Vendor returns fetched successfully');
+});
+
+const updateVendorReturn = catchAsync(async (req, res) => {
+  const returnRequest = await returnsService.updateVendorReturn(req.user.id, req.params.id, req.body);
+  sendResponse(res, 200, { returnRequest }, 'Return updated successfully');
+});
+
 const processReturn = catchAsync(async (req, res) => {
   const { id } = req.params;
   const returnRequest = await returnsService.processReturn(req.user.id, id, req.body);
@@ -27,6 +37,8 @@ const processReturn = catchAsync(async (req, res) => {
 module.exports = {
   requestReturn,
   getCustomerReturns,
+  getVendorReturns,
+  updateVendorReturn,
   updateReturnStatus,
   processReturn
 };

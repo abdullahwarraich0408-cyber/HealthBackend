@@ -23,6 +23,8 @@ adminReturnsRouter.put('/:id/status', validate(returnsValidator.updateReturnStat
 // Vendor Returns Routes
 vendorReturnsRouter.use(protect);
 vendorReturnsRouter.use(restrictTo('vendor'));
+vendorReturnsRouter.get('/', returnsController.getVendorReturns);
+vendorReturnsRouter.patch('/:id', returnsController.updateVendorReturn);
 vendorReturnsRouter.post('/:id/process', validate(returnsValidator.processReturnSchema), returnsController.processReturn);
 
 module.exports = {

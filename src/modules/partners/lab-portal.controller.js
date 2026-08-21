@@ -34,6 +34,11 @@ const updateBookingStatus = catchAsync(async (req, res) => {
   sendResponse(res, 200, { booking }, 'Booking updated');
 });
 
+const markPaymentReceived = catchAsync(async (req, res) => {
+  const booking = await labPortalService.markPaymentReceived(req.user.id, req.params.id);
+  sendResponse(res, 200, { booking }, 'Cash payment marked as received');
+});
+
 const uploadReport = catchAsync(async (req, res) => {
   const booking = await labPortalService.uploadReport(
     req.user.id,
@@ -98,6 +103,7 @@ module.exports = {
   updatePassword,
   getBookings,
   updateBookingStatus,
+  markPaymentReceived,
   uploadReport,
   uploadReportFile,
   assignCollector,

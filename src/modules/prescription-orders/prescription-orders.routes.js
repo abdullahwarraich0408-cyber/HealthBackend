@@ -21,6 +21,8 @@ router.get('/', restrictTo('customer'), controller.getMyOrders);
 router.get('/vendor', restrictTo('vendor'), controller.getVendorOrders);
 router.get('/vendor/history', restrictTo('vendor'), controller.getVendorHistory);
 router.get('/:id', validate(validator.orderIdSchema), controller.getOrder);
+router.get('/:id/document', validate(validator.orderIdSchema), controller.getDocument);
+router.post('/:id/review', restrictTo('vendor'), validate(validator.orderIdSchema), controller.reviewPrescription);
 
 router.post('/:id/accept', restrictTo('vendor'), validate(validator.orderIdSchema), controller.vendorAccept);
 router.post('/:id/decline', restrictTo('vendor'), validate(validator.orderIdSchema), controller.vendorDecline);

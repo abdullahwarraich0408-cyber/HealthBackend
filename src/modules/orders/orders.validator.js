@@ -28,7 +28,11 @@ const checkoutLockSchema = z.object({
 
 const updateOrderStatusSchema = z.object({
   body: z.object({
-    status: z.enum(['pending', 'processing', 'shipped', 'delivered', 'cancelled'])
+    status: z.string().min(2),
+    reason: z.string().optional(),
+    rejection_reason: z.string().optional(),
+    cancellation_reason: z.string().optional(),
+    note: z.string().optional(),
   })
 });
 

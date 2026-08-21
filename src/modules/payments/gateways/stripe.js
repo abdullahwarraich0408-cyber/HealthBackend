@@ -27,7 +27,18 @@ function toMinorUnits(amount, currency) {
   return Math.round(normalized * 100);
 }
 
-const createCheckoutSession = async (amount, orderIds, returnBaseUrl) => {
+/**
+ * Create a Stripe Checkout Session (sandbox/test when using sk_test_* keys).
+ */
+const createCheckoutSession = async ({
+  amount,
+  productName = 'Medzoos Payment',
+  productDescription = 'Healthcare payment',
+  metadata = {},
+  successUrl,
+  cancelUrl,
+  returnBaseUrl,
+}) => {
   const stripe = getStripeClient();
   if (!stripe) {
     return { success: false, message: 'Stripe is not configured on the server' };
@@ -37,10 +48,15 @@ const createCheckoutSession = async (amount, orderIds, returnBaseUrl) => {
   const unitAmount = toMinorUnits(amount, currency);
 
   if (!unitAmount || unitAmount < 50) {
-    return { success: false, message: 'Order total is too low for card payment' };
+    return { success: false, message: 'Amount is too low for card payment' };
   }
 
   const frontendUrl = (returnBaseUrl || env.FRONTEND_URL || 'http://localhost:3000').replace(/\/$/, '');
+  const success =
+    successUrl ||
+    `${frontendUrl}/payment/complete?success=true&session_id={CHECKOUT_SESSION_ID}`;
+  const cancel =
+    cancelUrl || `${frontendUrl}/payment/complete?cancelled=true`;
 
   try {
     const session = await stripe.checkout.sessions.create({
@@ -50,8 +66,8 @@ const createCheckoutSession = async (amount, orderIds, returnBaseUrl) => {
           price_data: {
             currency,
             product_data: {
-              name: 'Medzoos Order',
-              description: `Order payment for ${orderIds.length} item(s)`,
+              name: productName,
+              description: productDescription,
             },
             unit_amount: unitAmount,
           },
@@ -59,10 +75,10 @@ const createCheckoutSession = async (amount, orderIds, returnBaseUrl) => {
         },
       ],
       mode: 'payment',
-      success_url: `${frontendUrl}/checkout?success=true&session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: `${frontendUrl}/checkout?cancelled=true`,
+      success_url: success,
+      cancel_url: cancel,
       metadata: {
-        order_ids: orderIds.join(','),
+        ...metadata,
         return_base_url: frontendUrl,
       },
     });
@@ -91,4 +107,5 @@ const retrieveCheckoutSession = async (sessionId) => {
 module.exports = {
   createCheckoutSession,
   retrieveCheckoutSession,
+  getStripeClient,
 };
