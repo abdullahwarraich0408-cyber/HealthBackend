@@ -55,6 +55,9 @@ jobs:
             echo "::error::Missing GitHub secret STRIPE_SECRET_KEY"
             exit 1
           fi
+          if [ -z "${{ secrets.GOOGLE_CLIENT_ID }}" ] || [ -z "${{ secrets.GOOGLE_CLIENT_SECRET }}" ]; then
+            echo "::warning::Add GitHub secrets GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET so live Google sign-in can exchange tokens. Skip only if they already exist in the server .env."
+          fi
           echo "Deploy secrets present"
 
       - name: Setup SSH
@@ -101,10 +104,17 @@ jobs:
             if [ -n "${{ secrets.FRONTEND_URL }}" ]; then
               set_env FRONTEND_URL "${{ secrets.FRONTEND_URL }}"
             else
-              set_env FRONTEND_URL "https://hub.asrar.dev"
+              set_env FRONTEND_URL "https://medzoos.com"
             fi
             set_env STRIPE_CURRENCY "pkr"
             set_env ENABLE_TEST_AUTH "true"
+
+            if [ -n "${{ secrets.GOOGLE_CLIENT_ID }}" ]; then
+              set_env GOOGLE_CLIENT_ID "${{ secrets.GOOGLE_CLIENT_ID }}"
+            fi
+            if [ -n "${{ secrets.GOOGLE_CLIENT_SECRET }}" ]; then
+              set_env GOOGLE_CLIENT_SECRET "${{ secrets.GOOGLE_CLIENT_SECRET }}"
+            fi
 
             npm ci --production
             npx prisma generate
